@@ -205,13 +205,13 @@ options:
 #### Linux
 
 ```bash
-python -m ectf25.utils.flash ./build_out/max78000.bin /dev/tty.usbmodem11302
+python -m ectf25.utils.flash ./decoder/build_out/max78000.bin /dev/tty.usbmodem11302
 ```
 
 #### PowerShell
 
 ```
-python -m ectf25.utils.flash .\build_out\max78000.bin COM12
+python -m ectf25.utils.flash .\decoder\build_out\max78000.bin COM12
 ```
 
 ## Host Tools
@@ -319,13 +319,13 @@ options:
 #### Linux
 
 ```bash
-python -m ectf25.utils.tester --port /dev/tty.usbmodem11302 -s ./secrets.json rand -c 1 -f 64
+python -m ectf25.utils.tester --port /dev/tty.usbmodem11302 -s secrets/secrets.json rand -c 1 -f 64
 ```
 
 #### PowerShell
 
 ```
-python -m ectf25.utils.tester --port COM12 -s .\secrets\secrets.json rand -c 1 -f 64
+python -m ectf25.utils.tester --port COM12 -s secrets\secrets.json rand -c 1 -f 64
 ```
 
 ## Running the Satellite and Encoder
