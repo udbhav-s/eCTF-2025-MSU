@@ -174,7 +174,7 @@ options:
 ### **Example Utilization**
 
 This command will create a subscription file called subscription.bin targeting a device with ID 0xDEADBEEF, a start
-timestamp of 32, and an end timestamp of 128 for channel 1.
+timestamp of 32, and an end timestamp of 128 for channel 1. Make sure to run this command from the root directory.
 
 #### Linux and PowerShell
 
