@@ -46,6 +46,8 @@ to change some details of the command for their own machine (e.g. '`python` -> `
 '`path/to/file`' -> '`path\to\file`', '`-v ./path/to/volume:/dest`' ->
 '`-v .\path\to\volume:/dest`', '`/dev/tty.usbmodem123`' -> '`COM12`').
 
+**Note:** Command listed under any "Example Utilization" section should be executed from the root directory of this repository.
+
 ### Environment Build
 
 The environment is built with Docker, which should install all necessary packages for running the
