@@ -46,6 +46,8 @@ to change some details of the command for their own machine (e.g. '`python` -> `
 '`path/to/file`' -> '`path\to\file`', '`-v ./path/to/volume:/dest`' ->
 '`-v .\path\to\volume:/dest`', '`/dev/tty.usbmodem123`' -> '`COM12`').
 
+**Note:** Command listed under [Usage and Requirements](#example-utilization) should be executed from the root directory of this repository.
+
 ### Environment Build
 
 The environment is built with Docker, which should install all necessary packages for running the
@@ -174,7 +176,7 @@ options:
 ### **Example Utilization**
 
 This command will create a subscription file called subscription.bin targeting a device with ID 0xDEADBEEF, a start
-timestamp of 32, and an end timestamp of 128 for channel 1. Make sure to run this command from the root directory.
+timestamp of 32, and an end timestamp of 128 for channel 1.
 
 #### Linux and PowerShell
 
