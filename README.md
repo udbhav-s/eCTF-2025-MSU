@@ -46,7 +46,7 @@ to change some details of the command for their own machine (e.g. '`python` -> `
 '`path/to/file`' -> '`path\to\file`', '`-v ./path/to/volume:/dest`' ->
 '`-v .\path\to\volume:/dest`', '`/dev/tty.usbmodem123`' -> '`COM12`').
 
-**Note:** Command listed under [Usage and Requirements](#example-utilization) should be executed from the root directory of this repository.
+**Note:** Command listed under any "Example Utilization" section should be executed from the root directory of this repository.
 
 ### Environment Build
 
