@@ -44,6 +44,15 @@ int uart_init(void){
  *      a list of return codes.
 */
 int uart_readbyte_raw(void){
+    // Documentation for read character & read character raw:
+    // https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX78002/group__uart.html#ga5128672adc1a7880f77da128753ead73
+    // One is blocking, the other returns an error on unavailable byte
+    // MXC_UART_GET_UART returns MXC_UART{1, 2, 3}: (The board has three UART registers, check max user guide)
+    // https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX78002/max78002_8h_source.html
+    // These macros are the UART addresses (mentioned in the user guide):
+    // define MXC_BASE_UART0 ((uint32_t)0x40042000UL) <--- In Table 3-3 
+    // define MXC_UART0 ((mxc_uart_regs_t *)MXC_BASE_UART0)
+
     int data = MXC_UART_ReadCharacterRaw(MXC_UART_GET_UART(CONSOLE_UART));
     return data;
 }
