@@ -53,6 +53,9 @@ int uart_readbyte_raw(void){
     // define MXC_BASE_UART0 ((uint32_t)0x40042000UL) <--- In Table 3-3 
     // define MXC_UART0 ((mxc_uart_regs_t *)MXC_BASE_UART0)
 
+    // Good introduction to UART:
+    // https://sites.google.com/vt.edu/introduction-to-embeddedsystem/uart/introduction-uart
+
     int data = MXC_UART_ReadCharacterRaw(MXC_UART_GET_UART(CONSOLE_UART));
     return data;
 }
