@@ -8,6 +8,7 @@ MEMORY {
     SRAM        (rwx): ORIGIN = 0x20000000, LENGTH = 0x00020000 /* 128kB SRAM */
 }
 
+/* Sections in linker scripts: https://users.informatik.haw-hamburg.de/~krabat/FH-Labor/gnupro/5_GNUPro_Utilities/c_Using_LD/ldLinker_scripts.html#:~:text=The%20%60%20SECTIONS%20'%20command%20tells%20the,%7D */
 SECTIONS {
     .rom :
     {
