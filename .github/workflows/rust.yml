@@ -20,6 +20,7 @@ jobs:
     - name: Build
       working-directory: ./rustdev
       run: cargo build --verbose
-    - name: Run tests
-      working-directory: ./rustdev
-      run: cargo test --verbose
+# No tests currently
+#    - name: Run tests
+#      working-directory: ./rustdev
+#      run: cargo test --verbose
