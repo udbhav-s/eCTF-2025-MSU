@@ -1,6 +1,6 @@
 [package]
-name = "{{project-name}}"
-authors = ["{{authors}}"]
+name = "eCTF-2025-MSU"
+authors = ["cselip"]
 edition = "2021"
 publish = false
 
