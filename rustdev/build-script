@@ -1,0 +1,75 @@
+#!/bin/bash -x
+
+# Function to display usage
+usage() {
+    echo "Usage: $0 [-e] build|flash target"
+    echo "Example: $0 -e build uart-simple"
+    exit 1
+}
+
+# Initialize variables
+EXAMPLE=0
+TARGET=""
+ARGUMENT=""
+
+# Define paths
+RUST_TEMPLATE_PATH=$(dirname "$(realpath $0)")
+ECTF_REF_PATH=$(realpath "$RUST_TEMPLATE_PATH/../")
+RUST_BIN_PATH=target/thumbv7em-none-eabihf/debug
+
+# Parse command-line options
+while getopts ":e" opt; do
+    case $opt in
+        e)
+            EXAMPLE=1
+            ;;
+        # *)
+        #     usage
+        #     ;;
+    esac
+done
+
+# Shift the parsed options away, leaving the positional arguments
+shift $((OPTIND - 1))
+
+# Check if the required arguments are provided
+if [ -z "$1" ] || [ -z "$2" ]; then
+    usage
+fi
+
+# Assign the positional arguments to variables
+ARGUMENT=$1
+TARGET=$2
+
+# Append /examples to RUST_BIN_PATH if -e flag is set
+if [ $EXAMPLE -eq 1 ]; then
+    RUST_BIN_PATH+=/examples
+fi
+
+# Run a command based on the argument
+case $ARGUMENT in
+    "build")
+        echo "Building firmware..."
+        if [ $EXAMPLE -eq 0 ]; then
+            cargo build
+        else
+            cargo build --example $TARGET
+        fi
+        arm-none-eabi-objcopy -O binary \
+            "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET"  \
+            "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin"
+        ;;
+    
+    "flash")
+        echo "Flashing firmware..."
+        # Go to eCTF tools directory
+        cd $ECTF_REF_PATH
+        . .venv/bin/activate
+        python -m ectf25.utils.flash "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin" /dev/ttyACM0
+        deactivate
+        ;;
+    
+    *)
+        usage
+        ;;
+esac
