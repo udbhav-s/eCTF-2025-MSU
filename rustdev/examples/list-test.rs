@@ -111,6 +111,7 @@ fn main() -> ! {
     loop {
         // let hdr = read_header(&console);
 
+        // Wait for 4 bytes of input, then print message
         let mut test = [0; 4];
         console.read_exact(&mut test).unwrap();
 
