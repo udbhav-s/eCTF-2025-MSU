@@ -99,10 +99,12 @@ def test_decoder(args):
     ]
 
     logger.info("Running stress test...")
+    total_frame_len = 0
     start = time.perf_counter()
     for frame in tqdm(frames):
         try:
-            decoder.decode(frame.data)
+            frame_data = decoder.decode(frame.data)
+            total_frame_len += len(frame_data)
         except Exception as e:
             logger.error(f"Errored on frame {frame}!")
             raise e
@@ -110,7 +112,7 @@ def test_decoder(args):
 
     # Check threshold
     kb_threshold = args.threshold / 1000
-    kb_throughput = args.test_size / total / 1000
+    kb_throughput = total_frame_len / total / 1000
     if kb_throughput < kb_threshold:
         logger.error(
             f"Throughput too slow! {kb_throughput:,.2f} KBps < {kb_threshold:,.2f} KBps"
