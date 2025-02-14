@@ -136,7 +136,7 @@ def parse_args():
     parser.add_argument(
         "--channels",
         "-c",
-        action="append",
+        nargs="+",
         type=int,
         default=[0, 1, 2, 3],
         help="Channels to randomly chose from (NOTE: 0 is broadcast)",
