@@ -2,9 +2,12 @@
 #![no_main]
 
 pub extern crate max7800x_hal as hal;
+use core::num;
+
 use embedded_io::Read;
 pub use hal::pac;
 pub use hal::entry;
+use hal::pac::dma::ch;
 use hal::pac::Uart0;
 use hal::uart::BuiltUartPeripheral;
 use panic_halt as _;
@@ -18,6 +21,13 @@ struct MessageHeader {
     magic: u8,
     opcode: u8,
     length: u16,
+}
+
+const CHANNEL_INFO_SIZE: u32 = 20;
+struct ChannelInfo {
+    channel_id: u32,
+    start_timestamp: u64,
+    end_timestamp: u64,
 }
 
 fn read_ack(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>) -> Result<(), ()> {
@@ -52,6 +62,7 @@ fn read_header(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af
     hdr.opcode = console.read_byte();
 
     // Read message length
+    // TODO: Restrict the maximum length
     let mut length_bytes: [u8; 2] = [0; 2];
     console.read_bytes(&mut length_bytes);
 
@@ -60,13 +71,26 @@ fn read_header(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af
     hdr
 }
 
+// TODO: Do this better
+fn write_channel(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>, channel: &ChannelInfo) {
+    console.write_bytes(&channel.channel_id.to_le_bytes());
+    console.write_bytes(&channel.start_timestamp.to_le_bytes());
+    console.write_bytes(&channel.end_timestamp.to_le_bytes());
+}
+
 fn write_list(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>) {
+    // The channels we are subscribed to
+    let ch1 = ChannelInfo { channel_id: 0, start_timestamp: 100, end_timestamp: 23230000 };
+    let ch2 = ChannelInfo { channel_id: 0, start_timestamp: 500, end_timestamp: 4200 };
+
+    // number of channels (u32) + channel info for each channel
+    let num_channels: u32 = 2;
+    let length: u32 = size_of_val(&num_channels) as u32 + CHANNEL_INFO_SIZE * 2;
+
     // Write message header
     let mut hdr = MessageHeader { magic: b'%', opcode: b'L', length: 0 };
 
-    let body = b"Hello from Rust! This board is subscribed to 0 channels";
-
-    hdr.length = u16::try_from(body.len()).unwrap();
+    hdr.length = u16::try_from(length).unwrap();
 
     // Write bytes for header (TODO: do this by converting the struct to bytes)
     console.write_byte(hdr.magic);
@@ -75,7 +99,9 @@ fn write_list(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1
 
     read_ack(&console).unwrap();
 
-    console.write_bytes(body);
+    console.write_bytes(&num_channels.to_le_bytes());
+    write_channel(console, &ch1);
+    write_channel(console, &ch2);
 }
 
 
@@ -109,15 +135,17 @@ fn main() -> ! {
         .build();
 
     loop {
-        // let hdr = read_header(&console);
+        let hdr = read_header(&console);
 
-        // Wait for 4 bytes of input, then print message
-        let mut test = [0; 4];
-        console.read_exact(&mut test).unwrap();
+        write!(console, "Received header!\n").unwrap();
 
-        let hdr = MessageHeader { magic: 0, opcode: 0, length: 0 };
+        // (UART test) Wait for 4 bytes of input, then print message
+        // let mut test = [0; 4];
+        // console.read_exact(&mut test).unwrap();
 
-        console.write_bytes(b"Waddup udbhav\r\n");
+        // let hdr = MessageHeader { magic: 0, opcode: 0, length: 0 };
+
+        // console.write_bytes(b"Waddup udbhav\r\n");
 
         match hdr.opcode {
             b'L' => {
