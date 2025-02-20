@@ -93,14 +93,11 @@ fn write_list<U: Write + Read>(console: &mut U) -> Result<(), ()> {
 fn main() -> ! {
     // Take ownership of the MAX78000 peripherals
     let p = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
     // Initialize system peripherals and clocks
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral
-    let rate = clks.sys_clk.frequency;
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
 
     // Initialize and split the GPIO0 peripheral into pins
     let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
