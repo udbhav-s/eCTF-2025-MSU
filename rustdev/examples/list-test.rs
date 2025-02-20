@@ -2,80 +2,90 @@
 #![no_main]
 
 pub extern crate max7800x_hal as hal;
-use embedded_io::Read;
+
 pub use hal::pac;
 pub use hal::entry;
-use hal::pac::Uart0;
-use hal::uart::BuiltUartPeripheral;
 use panic_halt as _;
-use hal::gpio::{Af1,Pin};
+use bytemuck::{Pod, Zeroable};
 
 // embedded_io API allows usage of core macros like `write!`
-use embedded_io::Write;
+use embedded_io::{Read, Write};
 
 // Ref: https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
+#[repr(C, packed)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct MessageHeader {
     magic: u8,
     opcode: u8,
     length: u16,
 }
 
-fn read_ack(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>) -> Result<(), ()> {
-    // Wait for header magic
-    while console.read_byte() != b'%' {}
-    let opcode = console.read_byte();
+#[repr(C, packed)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct ChannelInfo {
+    channel_id: u32,
+    start_timestamp: u64,
+    end_timestamp: u64,
+}
 
-    // Make sure next header is for an ACK
-    if opcode != b'A' {
-        return Err(())
+fn read_ack<U: Read>(console: &mut U) -> Result<(), ()> {
+    let mut buf = [0u8; 4];
+    console.read_exact(&mut buf).map_err(|_| ())?;
+    
+    if buf[0] != b'%' || buf[1] != b'A' {
+        return Err(());
     }
 
-    // Discard length bytes
-    for _ in 0..2 {
-        console.read_byte();
-    }
+    // TODO: Add a check for maximum packet length allowed in header based on our protocol
 
     Ok(())
 }
 
-fn write_ack(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>) {
-    let ack_msg = "%A\x00\x00";
-    console.write_bytes(ack_msg.as_bytes());
+fn write_ack<U: Write>(console: &mut U) -> Result<(), ()> {
+    console.write_all(b"%A\x00\x00").map_err(|_| ())
 }
 
-fn read_header(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>) -> MessageHeader {
-    let mut hdr = MessageHeader { magic: 0, opcode: 0, length: 0 };
-    // Wait for header magic
-    while console.read_byte() != b'%' {}
-    hdr.magic = b'%';
+fn read_header<U: Read>(console: &mut U) -> Result<MessageHeader, ()> {
+    let mut hdr = MessageHeader::zeroed();
+    
+    while console.read_exact(core::slice::from_mut(&mut hdr.magic)).is_ok() {
+        if hdr.magic == b'%' {
+            break;
+        }
+    }
 
-    hdr.opcode = console.read_byte();
+    console.read_exact(core::slice::from_mut(&mut hdr.opcode)).map_err(|_| ())?;
+    console.read_exact(&mut hdr.length.to_le_bytes()).map_err(|_| ())?;
 
-    // Read message length
-    let mut length_bytes: [u8; 2] = [0; 2];
-    console.read_bytes(&mut length_bytes);
-
-    hdr.length = u16::from_le_bytes(length_bytes);
-
-    hdr
+    Ok(hdr)
 }
 
-fn write_list(console: &BuiltUartPeripheral<Uart0, Pin<0, 0, Af1>, Pin<0, 1, Af1>, (), ()>) {
-    // Write message header
-    let mut hdr = MessageHeader { magic: b'%', opcode: b'L', length: 0 };
+fn write_channel<U: Write>(console: &mut U, channel: &ChannelInfo) -> Result<(), ()> {
+    console.write_all(bytemuck::bytes_of(channel)).map_err(|_| ())
+}
 
-    let body = b"Hello from Rust! This board is subscribed to 0 channels";
+fn write_list<U: Write + Read>(console: &mut U) -> Result<(), ()> {
+    let channels = [
+        ChannelInfo { channel_id: 1, start_timestamp: 100, end_timestamp: 23230000 },
+        ChannelInfo { channel_id: 2, start_timestamp: 500, end_timestamp: 4200 },
+    ];
 
-    hdr.length = u16::try_from(body.len()).unwrap();
+    let num_channels = channels.len() as u32;
+    let channel_info_size = core::mem::size_of::<ChannelInfo>();
+    let length = (size_of::<u32>() + channels.len() * channel_info_size) as u16;
 
-    // Write bytes for header (TODO: do this by converting the struct to bytes)
-    console.write_byte(hdr.magic);
-    console.write_byte(hdr.opcode);
-    console.write_bytes(&hdr.length.to_le_bytes());
+    let hdr = MessageHeader { magic: b'%', opcode: b'L', length };
+    
+    console.write_all(bytemuck::bytes_of(&hdr)).map_err(|_| ())?;
+    
+    if read_ack(console).is_ok() {
+        console.write_all(&num_channels.to_le_bytes()).ok();
+        for ch in &channels {
+            write_channel(console, ch).map_err(|_| ())?;
+        }
+    }
 
-    read_ack(&console).unwrap();
-
-    console.write_bytes(body);
+    Ok(())
 }
 
 
@@ -109,27 +119,18 @@ fn main() -> ! {
         .build();
 
     loop {
-        // let hdr = read_header(&console);
-
-        // Wait for 4 bytes of input, then print message
-        let mut test = [0; 4];
-        console.read_exact(&mut test).unwrap();
-
-        let hdr = MessageHeader { magic: 0, opcode: 0, length: 0 };
-
-        console.write_bytes(b"Waddup udbhav\r\n");
-
-        match hdr.opcode {
-            b'L' => {
-                write_ack(&console);
-                
-                write_list(&console);
+        match read_header(&mut console) {
+            Ok(hdr) => {
+                if hdr.opcode == b'L' {
+                    write_ack(&mut console).unwrap();
+                    write_list(&mut console).unwrap();
+                } else {
+                    let _ = console.write_all(b"We only support the List command right now!\n");
+                }
             }
-            _ => {
-                write!(console, "We only support the List command right now!\n").unwrap();
-                continue;
+            Err(_) => {
+                let _ = console.write_all(b"There was an error!\n");
             }
         }
-
     }
 }
