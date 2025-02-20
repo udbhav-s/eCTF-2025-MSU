@@ -11,7 +11,20 @@ use bytemuck::{Pod, Zeroable};
 // embedded_io API allows usage of core macros like `write!`
 use embedded_io::{Read, Write};
 
+const MSG_MAGIC: u8 = b'%'; 
+
 // Ref: https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MsgType {
+    Decode = b'D',
+    Subscribe = b'S',
+    List = b'L',
+    Ack = b'A',
+    Debug = b'G',
+    Error = b'E',
+}
+
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct MessageHeader {
@@ -32,7 +45,7 @@ fn read_ack<U: Read>(console: &mut U) -> Result<(), ()> {
     let mut buf = [0u8; 4];
     console.read_exact(&mut buf).map_err(|_| ())?;
     
-    if buf[0] != b'%' || buf[1] != b'A' {
+    if buf[0] != MSG_MAGIC || buf[1] != MsgType::Ack as u8 {
         return Err(());
     }
 
@@ -49,7 +62,7 @@ fn read_header<U: Read>(console: &mut U) -> Result<MessageHeader, ()> {
     let mut hdr = MessageHeader::zeroed();
     
     while console.read_exact(core::slice::from_mut(&mut hdr.magic)).is_ok() {
-        if hdr.magic == b'%' {
+        if hdr.magic == MSG_MAGIC {
             break;
         }
     }
@@ -60,12 +73,30 @@ fn read_header<U: Read>(console: &mut U) -> Result<MessageHeader, ()> {
     Ok(hdr)
 }
 
+fn write_debug<U: Write + Read>(console: &mut U, msg: &str) -> Result<(), ()> {
+    let bytes = msg.as_bytes();
+    
+    // Send debug message header
+    let hdr = MessageHeader {
+        magic: MSG_MAGIC,
+        opcode: MsgType::Debug as u8,
+        length: bytes.len() as u16
+    };
+    console.write_all(bytemuck::bytes_of(&hdr)).map_err(|_| ())?;
+
+    // Debug messages are not sent an ACK, so we don't send them in chunks
+    // Send entire message at once
+    console.write_all(bytes).map_err(|_| ())?;
+
+    Ok(())
+}
+
 fn write_channel<U: Write>(console: &mut U, channel: &ChannelInfo) -> Result<(), ()> {
     console.write_all(bytemuck::bytes_of(channel)).map_err(|_| ())
 }
 
 fn write_list<U: Write + Read>(console: &mut U) -> Result<(), ()> {
-    let channels = [
+    let channels: [ChannelInfo; 2] = [
         ChannelInfo { channel_id: 1, start_timestamp: 100, end_timestamp: 23230000 },
         ChannelInfo { channel_id: 2, start_timestamp: 500, end_timestamp: 4200 },
     ];
@@ -104,7 +135,7 @@ fn main() -> ! {
     // Configure UART to host computer with 115200 8N1 settings
     let rx_pin = gpio0_pins.p0_0.into_af1();
     let tx_pin = gpio0_pins.p0_1.into_af1();
-    let mut console = hal::uart::UartPeripheral::uart0(
+    let mut console: hal::uart::BuiltUartPeripheral<pac::Uart0, hal::gpio::Pin<0, 0, hal::gpio::Af1>, hal::gpio::Pin<0, 1, hal::gpio::Af1>, (), ()> = hal::uart::UartPeripheral::uart0(
         p.uart0,
         &mut gcr.reg,
         rx_pin,
@@ -118,8 +149,9 @@ fn main() -> ! {
     loop {
         match read_header(&mut console) {
             Ok(hdr) => {
-                if hdr.opcode == b'L' {
+                if hdr.opcode == MsgType::List as u8 {
                     write_ack(&mut console).unwrap();
+                    write_debug(&mut console, "Hello from Rust!\n").unwrap();
                     write_list(&mut console).unwrap();
                 } else {
                     let _ = console.write_all(b"We only support the List command right now!\n");
