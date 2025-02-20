@@ -1,9 +1,14 @@
-#!/bin/bash -x
+#!/bin/bash
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 [-e] build|flash target"
-    echo "Example: $0 -e build uart-simple"
+    echo "Usage: $0 build|flash|qemu|where target [-e]"
+    echo "build: Run cargo build and objcopy"
+    echo "flash: Run the eCTF Flash tool"
+    echo "qemu: Run the 2025 QEMU setup with GDB (needs tmux)"
+    echo "where: Print the location of the target binary"
+    echo "For working with the examples directory, use the -e flag" 
+    echo "Example: $0 build -e uart-simple"
     exit 1
 }
 
@@ -16,24 +21,38 @@ ARGUMENT=""
 RUST_TEMPLATE_PATH=$(dirname "$(realpath $0)")
 ECTF_REF_PATH=$(realpath "$RUST_TEMPLATE_PATH/../")
 RUST_BIN_PATH=target/thumbv7em-none-eabihf/debug
+QEMU_PATH=/home/udbhav/Documents/ectf-2025/MSU-eCTF2025-SIM/qemu-mitre2025
+
+BOARD_TTY=/dev/ttyACM0 
 
 # Parse command-line options
-while getopts ":e" opt; do
-    case $opt in
-        e)
+TEMP=$(getopt -o e --name "$0" -- "$@")
+if [ $? -ne 0 ]; then
+    usage
+fi
+
+# Set the positional parameters to the normalized form
+eval set -- "$TEMP"
+
+# Extract options
+while true; do
+    case "$1" in
+        -e)
             EXAMPLE=1
+            shift
             ;;
-        # *)
-        #     usage
-        #     ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            break
+            ;;
     esac
 done
 
-# Shift the parsed options away, leaving the positional arguments
-shift $((OPTIND - 1))
-
 # Check if the required arguments are provided
-if [ -z "$1" ] || [ -z "$2" ]; then
+if [ $# -lt 2 ]; then
     usage
 fi
 
@@ -49,12 +68,18 @@ fi
 # Run a command based on the argument
 case $ARGUMENT in
     "build")
-        echo "Building firmware..."
+        echo "Building firmware with cargo build"
         if [ $EXAMPLE -eq 0 ]; then
             cargo build
         else
             cargo build --example $TARGET
         fi
+
+        # Log objcopy
+        echo "Running objcopy"
+        OBJCOPY_CMD="arm-none-eabi-objcopy -O binary \"$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET\" \"$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin\""
+        echo "Executing: $OBJCOPY_CMD"
+
         arm-none-eabi-objcopy -O binary \
             "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET"  \
             "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin"
@@ -65,10 +90,51 @@ case $ARGUMENT in
         # Go to eCTF tools directory
         cd $ECTF_REF_PATH
         . .venv/bin/activate
-        python -m ectf25.utils.flash "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin" /dev/ttyACM0
+
+        # Log the flash command
+        echo "Running python -m ectf25.utils.flash \"$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin\" $BOARD_TTY"
+
+        python -m ectf25.utils.flash "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET.bin" "$BOARD_TTY"
         deactivate
         ;;
-    
+    "qemu")
+        if [[ ! -d $QEMU_PATH ]] ; then
+            echo "The QEMU directory does not exist on this system!"
+            echo "Please edit QEMU_PATH in the script to point to the directory on this machine (the below line)"
+            echo "QEMU_PATH=/home/udbhav/Documents/ectf-2025/MSU-eCTF2025-SIM/qemu-mitre2025"
+            exit 1
+        fi
+
+        echo "Setting up debugging environment with tmux..."
+        
+        # Check if tmux is installed
+        if ! command -v tmux &> /dev/null; then
+            echo "tmux is not installed. Please install it first."
+            exit 1
+        fi
+        
+        # Create a new tmux session named after the target
+        SESSION_NAME="debug-$TARGET"
+        
+        # Prepare the commands
+        QEMU_CMD="cd $QEMU_PATH && ./build/qemu-system-arm -machine maxim-max78000,bootloader=../insecure.bin,decoder=$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET -smp 1 -serial pty -S -gdb tcp::9822"
+        GDB_CMD="arm-none-eabi-gdb $RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET -q -ex \"tar ext :9822\""
+        
+        # Kill any existing session with the same name
+        tmux kill-session -t $SESSION_NAME 2> /dev/null
+        
+        # Create new session and run QEMU in it
+        tmux new-session -d -s $SESSION_NAME "$QEMU_CMD"
+        
+        # Split the window horizontally and run GDB in the new pane
+        tmux split-window -h -t $SESSION_NAME "$GDB_CMD"
+        
+        # Attach to the session
+        tmux attach-session -t $SESSION_NAME
+        ;;
+    "where")
+        echo "$RUST_TEMPLATE_PATH/$RUST_BIN_PATH/$TARGET"
+        ;;
     *)
         usage
         ;;
