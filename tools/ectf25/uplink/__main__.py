@@ -13,7 +13,7 @@ Copyright: Copyright (c) 2025 The MITRE Corporation
 import argparse
 import asyncio
 
-from ectf25.uplink import Channel, Uplink
+from __init__ import Channel, Uplink
 
 
 async def main():

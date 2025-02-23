@@ -13,7 +13,7 @@ Copyright: Copyright (c) 2025 The MITRE Corporation
 import argparse
 import struct
 import json
-
+import time
 
 class Encoder:
     def __init__(self, secrets: bytes):
@@ -53,6 +53,8 @@ class Encoder:
         """
         # TODO: encode the satellite frames so that they meet functional and
         #  security requirements
+
+        time.sleep(1);
 
         return struct.pack("<IQ", channel, timestamp) + frame
 

@@ -34,11 +34,18 @@ class Channel:
     def __post_init__(self):
         self.send_frame = Event()
 
+        self.last_time = time.time_ns()
+
     async def frame_clock(self):
         """Triggers the send_frame Event every time a frame should be sent"""
         sleep = 1 / self.fps
         try:
             while True:
+                elapsed = time.time_ns() - self.last_time
+                self.last_time = time.time_ns()
+
+                logger.info(f"frame_clock \t elapsed: {elapsed // 1e6}ms")
+                logger.info(f"frame_clock \t send_frame {'SET' if self.send_frame.is_set() else 'CLEAR'}, SETTING")
                 if self.send_frame.is_set():
                     logger.warning(
                         f"Channel {self.number} not meeting FPS requirement!"
@@ -148,13 +155,16 @@ class Uplink:
     async def frame_stream(self, channel: Channel):
         """Encode a frame for each Channel.send_frame event into the encoded queue"""
         logger.info(
-            f"Starting frame stream for channel {channel.number} @ {channel.fps} fps"
+            f"(DEBUG) Starting frame stream for channel {channel.number} @ {channel.fps} fps"
         )
         idx = 0
         ln = len(channel.frames)
         try:
             while True:
                 await channel.send_frame.wait()
+                logger.info(
+                    f"frame_stream \t send_frame CLEARING"
+                )
                 channel.send_frame.clear()
                 timestamp = int(time.time_ns() / 1000)
                 frame = channel.frames[idx % ln].data.encode()
@@ -167,6 +177,7 @@ class Uplink:
                     }
                 )
                 self.encoded_queue.put_nowait(packaged_frame)
+                # channel.send_frame.clear()
                 idx += 1
         except Exception as e:
             logger.critical(f"Frame stream failed for {channel}")
