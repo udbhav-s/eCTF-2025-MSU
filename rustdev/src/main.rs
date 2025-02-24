@@ -1,16 +1,18 @@
 #![no_std]
 #![no_main]
 
+pub mod modules;
+
 pub extern crate max7800x_hal as hal;
-pub use hal::pac;
 pub use hal::entry;
+pub use hal::pac;
 
 // pick a panicking behavior
 use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
-// use panic_abort as _; // requires nightly
-// use panic_itm as _; // logs messages over ITM; requires ITM support
-// use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
-// use cortex_m_semihosting::heprintln; // uncomment to use this for printing through semihosting
+                     // use panic_abort as _; // requires nightly
+                     // use panic_itm as _; // logs messages over ITM; requires ITM support
+                     // use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
+                     // use cortex_m_semihosting::heprintln; // uncomment to use this for printing through semihosting
 
 #[entry]
 fn main() -> ! {
@@ -20,7 +22,8 @@ fn main() -> ! {
 
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
-    let clks = gcr.sys_clk
+    let clks = gcr
+        .sys_clk
         .set_source(&mut gcr.reg, &ipo)
         .set_divider::<hal::gcr::clocks::Div1>(&mut gcr.reg)
         .freeze();
@@ -34,12 +37,7 @@ fn main() -> ! {
     // Configure UART to host computer with 115200 8N1 settings
     let rx_pin = gpio0_pins.p0_0.into_af1();
     let tx_pin = gpio0_pins.p0_1.into_af1();
-    let console = hal::uart::UartPeripheral::uart0(
-        p.uart0,
-        &mut gcr.reg,
-        rx_pin,
-        tx_pin
-    )
+    let console = hal::uart::UartPeripheral::uart0(p.uart0, &mut gcr.reg, rx_pin, tx_pin)
         .baud(115200)
         .clock_pclk(&clks.pclk)
         .parity(hal::uart::ParityBit::None)

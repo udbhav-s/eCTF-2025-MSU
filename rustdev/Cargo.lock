@@ -77,7 +77,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
-name = "eCTF-2025-MSU"
+name = "eCTF_2025_MSU"
 version = "0.0.0"
 dependencies = [
  "bytemuck",
