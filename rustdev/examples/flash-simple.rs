@@ -47,12 +47,12 @@ fn main() -> ! {
         .build();
 
     // Initialize the flash controller
-    let mut flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
+    let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
     write!(console, "Flash controller initialized!\r\n").unwrap();
 
     delay.delay_ms(1000);
 
-    let mut sub_manager = FlashManager::new(&mut flc);
+    let mut sub_manager = FlashManager::new(flc);
 
     let sub = ChannelInfo {
         channel_id: 1,
@@ -62,10 +62,16 @@ fn main() -> ! {
     };
 
     let target_address = 0x1006_0000;
+    let target_page_num = 1;
     let result = sub_manager.wipe_data(target_address);
     match result {
-        Ok(_) => write!(console, "Page {} erased\r\n", 1).unwrap(),
-        Err(err) => write!(console, "ERROR! Could not erase page {}: {:?}", 1, err).unwrap(),
+        Ok(_) => write!(console, "Page {} erased\r\n", target_page_num).unwrap(),
+        Err(err) => write!(
+            console,
+            "ERROR! Could not erase page {}: {:?}",
+            target_page_num, err
+        )
+        .unwrap(),
     };
 
     // Write data and handle potential error

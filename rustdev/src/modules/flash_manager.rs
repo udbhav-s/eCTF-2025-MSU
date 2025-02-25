@@ -8,12 +8,12 @@ use core::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 
 // The manager struct that holds a reference to the flash controller.
-pub struct FlashManager<'a> {
-    flc: &'a mut Flc,
+pub struct FlashManager {
+    flc: Flc,
 }
 
-impl<'a> FlashManager<'a> {
-    pub fn new(flc: &'a mut Flc) -> Self {
+impl FlashManager {
+    pub fn new(flc: Flc) -> Self {
         FlashManager { flc }
     }
 
