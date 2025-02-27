@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-pub mod modules;
-
 pub extern crate max7800x_hal as hal;
 pub use hal::entry;
 pub use hal::pac;

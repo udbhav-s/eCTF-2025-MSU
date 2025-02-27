@@ -124,9 +124,9 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "max78000-pac"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a92e5c8098687962edbf581e61913314363c00402a0d657f59f8218b5d9a129"
+checksum = "5eed83061e0ef10b5fe367de6701648384e75f3b0a2fadced4877efd505e49d5"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -136,9 +136,9 @@ dependencies = [
 
 [[package]]
 name = "max7800x-hal"
-version = "0.5.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f97b28e604d1684a1fa91a2f2abba634dd18370f90752534528506eaf1bb5a7"
+checksum = "8ed0ffe31710057e1d63066c4be6cd872b61721da8878ad11ee239767dcc1d5d"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -147,8 +147,7 @@ dependencies = [
  "embedded-io",
  "max78000-pac",
  "paste",
- "rand",
- "rand_core",
+ "rand_core 0.9.2",
 ]
 
 [[package]]
@@ -202,7 +201,7 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -210,6 +209,15 @@ name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+
+[[package]]
+name = "rand_core"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a509b1a2ffbe92afab0e55c8fd99dea1c280e8171bd2d88682bb20bc41cbc2c"
+dependencies = [
+ "zerocopy",
+]
 
 [[package]]
 name = "rustc_version"
@@ -271,4 +279,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de437e2a6208b014ab52972a27e59b33fa2920d3e00fe05026167a1c509d19cc"
 dependencies = [
  "vcell",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dde3bb8c68a8f3f1ed4ac9221aad6b10cece3e60a8e2ea54a6a2dec806d0084c"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eea57037071898bf96a6da35fd626f4f27e9cee3ead2a6c703cf09d472b2e700"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
