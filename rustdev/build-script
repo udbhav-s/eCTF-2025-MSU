@@ -52,13 +52,18 @@ while true; do
 done
 
 # Check if the required arguments are provided
-if [ $# -lt 2 ]; then
+if [ $# -lt 1 ]; then
     usage
 fi
 
-# Assign the positional arguments to variables
-ARGUMENT=$1
-TARGET=$2
+# If -e is not provided, then the target is eCTF_2025_MSU
+if [ $EXAMPLE -eq 0 ]; then
+    ARGUMENT=$1
+    TARGET=eCTF_2025_MSU
+else
+    ARGUMENT=$1
+    TARGET=$2
+fi
 
 # Append /examples to RUST_BIN_PATH if -e flag is set
 if [ $EXAMPLE -eq 1 ]; then

@@ -1,30 +1,38 @@
 #![no_std]
 #![no_main]
 
-pub extern crate max7800x_hal as hal;
-pub use hal::pac;
-pub use hal::entry;
+pub mod modules;
 
-// pick a panicking behavior
-use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
-// use panic_abort as _; // requires nightly
-// use panic_itm as _; // logs messages over ITM; requires ITM support
-// use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
-// use cortex_m_semihosting::heprintln; // uncomment to use this for printing through semihosting
+pub extern crate max7800x_hal as hal;
+use modules::flash_manager::FlashManager;
+use embedded_io::Write;
+pub use hal::entry;
+pub use hal::flc::{FlashError, Flc};
+pub use hal::gcr::clocks::{Clock, SystemClock};
+pub use hal::pac;
+use panic_halt as _; // Import module from lib.rs
+
+use bytemuck::{Pod, Zeroable};
+
+// Example: define a subscription record.
+#[derive(Copy, Clone, Pod, Zeroable)]
+#[repr(C, packed)]
+struct ChannelInfo {
+    channel_id: u32,
+    start_timestamp: u64,
+    end_timestamp: u64,
+    key: u16,
+}
 
 #[entry]
 fn main() -> ! {
-    // heprintln!("Hello from semihosting!");
+    // Take ownership of the MAX78000 peripherals
     let p = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
-
+    let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
+    // Initialize system peripherals and clocks
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
-    let clks = gcr.sys_clk
-        .set_source(&mut gcr.reg, &ipo)
-        .set_divider::<hal::gcr::clocks::Div1>(&mut gcr.reg)
-        .freeze();
-
+    let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral
     let rate = clks.sys_clk.frequency;
     let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
@@ -34,44 +42,62 @@ fn main() -> ! {
     // Configure UART to host computer with 115200 8N1 settings
     let rx_pin = gpio0_pins.p0_0.into_af1();
     let tx_pin = gpio0_pins.p0_1.into_af1();
-    let console = hal::uart::UartPeripheral::uart0(
-        p.uart0,
-        &mut gcr.reg,
-        rx_pin,
-        tx_pin
-    )
+    let mut console = hal::uart::UartPeripheral::uart0(p.uart0, &mut gcr.reg, rx_pin, tx_pin)
         .baud(115200)
         .clock_pclk(&clks.pclk)
         .parity(hal::uart::ParityBit::None)
         .build();
 
-    console.write_bytes(b"Hello, world!\r\n");
+    // Initialize the flash controller
+    let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
+    write!(console, "Flash controller initialized!\r\n").unwrap();
 
-    // Initialize the GPIO2 peripheral
-    let pins = hal::gpio::Gpio2::new(p.gpio2, &mut gcr.reg).split();
-    // Enable output mode for the RGB LED pins
-    let mut led_r = pins.p2_0.into_input_output();
-    let mut led_g = pins.p2_1.into_input_output();
-    let mut led_b = pins.p2_2.into_input_output();
-    // Use VDDIOH as the power source for the RGB LED pins (3.0V)
-    // Note: This HAL API may change in the future
-    led_r.set_power_vddioh();
-    led_g.set_power_vddioh();
-    led_b.set_power_vddioh();
+    delay.delay_ms(1000);
 
-    // LED blink loop
+    let mut sub_manager = FlashManager::new(flc);
+
+    let sub = ChannelInfo {
+        channel_id: 1,
+        start_timestamp: 100,
+        end_timestamp: 400,
+        key: 1,
+    };
+
+    let target_address = 0x1006_0000;
+    let target_page_num = 1;
+    let result = sub_manager.wipe_data(target_address);
+    match result {
+        Ok(_) => write!(console, "Page {} erased\r\n", target_page_num).unwrap(),
+        Err(err) => write!(
+            console,
+            "ERROR! Could not erase page {}: {:?}",
+            target_page_num, err
+        )
+        .unwrap(),
+    };
+
+    // Write data and handle potential error
+    if let Err(e) = sub_manager.write_data(0x1006_0000, &sub) {
+        write!(console, "Error writing data: {:?}\r\n", e).unwrap();
+    } else {
+        write!(console, "Data written.\r\n").unwrap();
+    }
+
+    let result = sub_manager.read_data::<ChannelInfo>(0x1006_0000);
+    match result {
+        Ok(read_sub) => write!(
+            console,
+            "Read subscription: channel_id: {}, start_timestamp: {}, end_timestamp: {}, key: {}\r\n",
+            read_sub.channel_id as u32,
+            read_sub.start_timestamp as u64,
+            read_sub.end_timestamp as u64,
+            read_sub.key as u16,
+        )
+        .unwrap(),
+        Err(err) => write!(console, "ERROR! Could not read subscription: {:?}\r\n", err).unwrap(),
+    };
+
     loop {
-        led_r.set_high();
-        delay.delay_ms(500);
-        led_g.set_high();
-        delay.delay_ms(500);
-        led_b.set_high();
-        delay.delay_ms(500);
-        led_r.set_low();
-        delay.delay_ms(500);
-        led_g.set_low();
-        delay.delay_ms(500);
-        led_b.set_low();
-        delay.delay_ms(500);
+        cortex_m::asm::nop();
     }
 }
