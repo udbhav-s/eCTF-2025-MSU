@@ -51,14 +51,10 @@ fn main() -> ! {
 
     // hashes
     let h = b"hello world";
-    let mut hasher = Md5::new();
-    hasher.update(h);
-    let mut hash = hasher.finalize();
     for i in 0..(64*1000) {
         let mut hasher = Md5::new();
-        hasher.update(hash);
-        hasher.update(&[(i%256) as u8]);
-        hash = hasher.finalize();
+        hasher.update(h);
+        let hash = hasher.finalize();
     }
 
 
