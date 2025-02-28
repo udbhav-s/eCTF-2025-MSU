@@ -1,0 +1,139 @@
+Dump of assembler code for function _ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE:
+   0x2000051e <+0>:	push	{r7, lr}
+   0x20000520 <+2>:	mov	r7, sp
+   0x20000522 <+4>:	sub	sp, #176	; 0xb0
+   0x20000524 <+6>:	str	r1, [sp, #28]
+   0x20000526 <+8>:	str	r0, [sp, #32]
+   0x20000528 <+10>:	str	r0, [sp, #48]	; 0x30
+   0x2000052a <+12>:	str	r1, [sp, #52]	; 0x34
+   0x2000052c <+14>:	b.n	0x2000052e <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+16>
+   0x2000052e <+16>:	ldr	r0, [sp, #32]
+   0x20000530 <+18>:	bl	0x200006d6 <__Thumbv7ABSLongThunk__ZN12max7800x_hal3flc3Flc7is_busy17h844e9bef66664d9aE>
+   0x20000534 <+22>:	cmp	r0, #0
+   0x20000536 <+24>:	bne.n	0x2000052e <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+16>
+   0x20000538 <+26>:	b.n	0x2000053a <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+28>
+   0x2000053a <+28>:	ldr	r1, [sp, #28]
+   0x2000053c <+30>:	ldr	r0, [sp, #32]
+   0x2000053e <+32>:	bl	0x20000726 <__Thumbv7ABSLongThunk__ZN12max7800x_hal3flc3Flc11set_address17h689ec754fc597450E>
+   0x20000542 <+36>:	bl	0x200006f4 <__Thumbv7ABSLongThunk__ZN79_$LT$core..result..Result$LT$T$C$E$GT$$u20$as$u20$core..ops..try_trait..Try$GT$6branch17hdc00b52e62d01098E>
+   0x20000546 <+40>:	strb.w	r0, [r7, #-138]
+   0x2000054a <+44>:	ldrb.w	r0, [r7, #-138]
+   0x2000054e <+48>:	cmp	r0, #3
+   0x20000550 <+50>:	bne.n	0x20000608 <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+234>
+   0x20000552 <+52>:	b.n	0x20000554 <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+54>
+   0x20000554 <+54>:	ldr	r0, [sp, #32]
+   0x20000556 <+56>:	bl	0x20000758 <__Thumbv7ABSLongThunk__ZN12max7800x_hal3flc3Flc12unlock_flash17h71bbb6d40e4c45eeE>
+   0x2000055a <+60>:	ldr	r0, [sp, #32]
+   0x2000055c <+62>:	adds	r0, #4
+   0x2000055e <+64>:	str	r0, [sp, #20]
+   0x20000560 <+66>:	str	r0, [sp, #172]	; 0xac
+   0x20000562 <+68>:	movw	r0, #36864	; 0x9000
+   0x20000566 <+72>:	movt	r0, #16386	; 0x4002
+   0x2000056a <+76>:	str	r0, [sp, #24]
+   0x2000056c <+78>:	str	r0, [sp, #60]	; 0x3c
+   0x2000056e <+80>:	movw	r0, #36872	; 0x9008
+   0x20000572 <+84>:	movt	r0, #16386	; 0x4002
+   0x20000576 <+88>:	str	r0, [sp, #16]
+   0x20000578 <+90>:	str	r0, [sp, #100]	; 0x64
+   0x2000057a <+92>:	str	r0, [sp, #124]	; 0x7c
+   0x2000057c <+94>:	str	r0, [sp, #128]	; 0x80
+   0x2000057e <+96>:	bl	0x20000690 <__Thumbv7ABSLongThunk__ZN4core3ptr13read_volatile17h19e8fa322cf72aa6E>
+   0x20000582 <+100>:	str	r0, [sp, #8]
+   0x20000584 <+102>:	str	r0, [sp, #104]	; 0x68
+   0x20000586 <+104>:	str	r0, [sp, #92]	; 0x5c
+   0x20000588 <+106>:	movs	r0, #0
+   0x2000058a <+108>:	str	r0, [sp, #12]
+   0x2000058c <+110>:	bl	0x2000069a <__Thumbv7ABSLongThunk__ZN43_$LT$u32$u20$as$u20$core..ops..bit..Not$GT$3not17h585691a25b6a728dE>
+   0x20000590 <+114>:	mov	r1, r0
+   0x20000592 <+116>:	ldr	r0, [sp, #8]
+   0x20000594 <+118>:	bl	0x200006a4 <__Thumbv7ABSLongThunk__ZN46_$LT$u32$u20$as$u20$core..ops..bit..BitAnd$GT$6bitand17h48eeb9c827a536b8E>
+   0x20000598 <+122>:	ldr	r1, [sp, #12]
+   0x2000059a <+124>:	bl	0x200006ae <__Thumbv7ABSLongThunk__ZN45_$LT$u32$u20$as$u20$core..ops..bit..BitOr$GT$5bitor17hd2ff080f1bd56cb6E>
+   0x2000059e <+128>:	str	r0, [sp, #96]	; 0x60
+   0x200005a0 <+130>:	add	r0, sp, #92	; 0x5c
+   0x200005a2 <+132>:	add	r1, sp, #96	; 0x60
+   0x200005a4 <+134>:	bl	0x20000794 <__Thumbv7ABSLongThunk__ZN12max7800x_hal3flc3Flc11_erase_page28_$u7b$$u7b$closure$u7d$$u7d$17he61a23457ed20a26E>
+   0x200005a8 <+138>:	mov	r1, r0
+   0x200005aa <+140>:	ldr	r0, [sp, #16]
+   0x200005ac <+142>:	ldr	r1, [r1, #0]
+   0x200005ae <+144>:	str	r1, [sp, #108]	; 0x6c
+   0x200005b0 <+146>:	str	r0, [sp, #140]	; 0x8c
+   0x200005b2 <+148>:	str	r1, [sp, #144]	; 0x90
+   0x200005b4 <+150>:	str	r0, [sp, #148]	; 0x94
+   0x200005b6 <+152>:	bl	0x200006c2 <__Thumbv7ABSLongThunk__ZN4core3ptr14write_volatile17h4f2fd55337062af0E>
+   0x200005ba <+156>:	ldr	r0, [sp, #32]
+   0x200005bc <+158>:	movs	r0, r0
+   0x200005be <+160>:	ldc2	8, cr9, [r0, #32]
+   0x200005c2 <+164>:	bl	0x20000762 <__Thumbv7ABSLongThunk__ZN12max7800x_hal3flc3Flc10lock_flash17hc2f3d8c38af3ca48E>
+   0x200005c6 <+168>:	ldr	r1, [sp, #20]
+   0x200005c8 <+170>:	ldr	r0, [sp, #24]
+   0x200005ca <+172>:	str	r1, [sp, #168]	; 0xa8
+   0x200005cc <+174>:	str	r0, [sp, #68]	; 0x44
+   0x200005ce <+176>:	movw	r0, #36900	; 0x9024
+   0x200005d2 <+180>:	movt	r0, #16386	; 0x4002
+   0x200005d6 <+184>:	str	r0, [sp, #76]	; 0x4c
+   0x200005d8 <+186>:	str	r0, [sp, #132]	; 0x84
+   0x200005da <+188>:	str	r0, [sp, #136]	; 0x88
+   0x200005dc <+190>:	bl	0x20000690 <__Thumbv7ABSLongThunk__ZN4core3ptr13read_volatile17h19e8fa322cf72aa6E>
+   0x200005e0 <+194>:	str	r0, [sp, #40]	; 0x28
+   0x200005e2 <+196>:	add	r0, sp, #40	; 0x28
+   0x200005e4 <+198>:	str	r0, [sp, #72]	; 0x48
+   0x200005e6 <+200>:	ldrb.w	r0, [sp, #40]	; 0x28
+   0x200005ea <+204>:	ubfx	r0, r0, #1, #1
+   0x200005ee <+208>:	strb.w	r0, [r7, #-61]
+   0x200005f2 <+212>:	strb.w	r0, [r7, #-137]
+   0x200005f6 <+216>:	sub.w	r0, r7, #137	; 0x89
+   0x200005fa <+220>:	str	r0, [sp, #116]	; 0x74
+   0x200005fc <+222>:	str	r0, [sp, #120]	; 0x78
+   0x200005fe <+224>:	ldrb.w	r0, [r7, #-137]
+   0x20000602 <+228>:	lsls	r0, r0, #31
+   0x20000604 <+230>:	cbnz	r0, 0x2000062a <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+268>
+   0x20000606 <+232>:	b.n	0x20000622 <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+260>
+   0x20000608 <+234>:	ldrb.w	r0, [r7, #-138]
+   0x2000060c <+238>:	strb.w	r0, [r7, #-117]
+   0x20000610 <+242>:	movw	r1, #22752	; 0x58e0
+   0x20000614 <+246>:	movt	r1, #4097	; 0x1001
+   0x20000618 <+250>:	bl	0x20000712 <__Thumbv7ABSLongThunk__ZN153_$LT$core..result..Result$LT$T$C$F$GT$$u20$as$u20$core..ops..try_trait..FromResidual$LT$core..result..Result$LT$core..convert..Infallible$C$E$GT$$GT$$GT$13from_residual17h4980f8a9225a5b0aE>
+   0x2000061c <+254>:	strb.w	r0, [r7, #-139]
+   0x20000620 <+258>:	b.n	0x20000686 <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+360>
+   0x20000622 <+260>:	movs	r0, #3
+   0x20000624 <+262>:	strb.w	r0, [r7, #-139]
+   0x20000628 <+266>:	b.n	0x20000686 <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+360>
+   0x2000062a <+268>:	ldr	r0, [sp, #32]
+   0x2000062c <+270>:	adds	r0, #4
+   0x2000062e <+272>:	str	r0, [sp, #164]	; 0xa4
+   0x20000630 <+274>:	movw	r0, #36864	; 0x9000
+   0x20000634 <+278>:	movt	r0, #16386	; 0x4002
+   0x20000638 <+282>:	str	r0, [sp, #64]	; 0x40
+   0x2000063a <+284>:	movw	r0, #36900	; 0x9024
+   0x2000063e <+288>:	movt	r0, #16386	; 0x4002
+   0x20000642 <+292>:	str	r0, [sp, #4]
+   0x20000644 <+294>:	str	r0, [sp, #84]	; 0x54
+   0x20000646 <+296>:	movs	r0, #0
+   0x20000648 <+298>:	str	r0, [sp, #0]
+   0x2000064a <+300>:	bl	0x2000069a <__Thumbv7ABSLongThunk__ZN43_$LT$u32$u20$as$u20$core..ops..bit..Not$GT$3not17h585691a25b6a728dE>
+   0x2000064e <+304>:	mov	r1, r0
+   0x20000650 <+306>:	ldr	r0, [sp, #0]
+   0x20000652 <+308>:	bl	0x200006a4 <__Thumbv7ABSLongThunk__ZN46_$LT$u32$u20$as$u20$core..ops..bit..BitAnd$GT$6bitand17h48eeb9c827a536b8E>
+   0x20000656 <+312>:	ldr	r1, [sp, #0]
+   0x20000658 <+314>:	bl	0x200006ae <__Thumbv7ABSLongThunk__ZN45_$LT$u32$u20$as$u20$core..ops..bit..BitOr$GT$5bitor17hd2ff080f1bd56cb6E>
+   0x2000065c <+318>:	str	r0, [sp, #80]	; 0x50
+   0x2000065e <+320>:	add	r0, sp, #80	; 0x50
+   0x20000660 <+322>:	bl	0x2000079e <__Thumbv7ABSLongThunk__ZN12max7800x_hal3flc3Flc11_erase_page28_$u7b$$u7b$closure$u7d$$u7d$17hc5db797c54d89971E>
+   0x20000664 <+326>:	mov	r1, r0
+   0x20000666 <+328>:	ldr	r0, [sp, #4]
+   0x20000668 <+330>:	ldr	r1, [r1, #0]
+   0x2000066a <+332>:	str	r1, [sp, #88]	; 0x58
+   0x2000066c <+334>:	str	r0, [sp, #152]	; 0x98
+   0x2000066e <+336>:	str	r1, [sp, #156]	; 0x9c
+   0x20000670 <+338>:	str	r0, [sp, #160]	; 0xa0
+   0x20000672 <+340>:	bl	0x200006c2 <__Thumbv7ABSLongThunk__ZN4core3ptr14write_volatile17h4f2fd55337062af0E>
+   0x20000676 <+344>:	movs	r0, #1
+   0x20000678 <+346>:	strb.w	r0, [r7, #-129]
+   0x2000067c <+350>:	ldrb.w	r0, [r7, #-129]
+   0x20000680 <+354>:	strb.w	r0, [r7, #-139]
+   0x20000684 <+358>:	b.n	0x20000686 <_ZN12max7800x_hal3flc3Flc11_erase_page17hd7e0081a10a9d9deE+360>
+   0x20000686 <+360>:	ldrb.w	r0, [r7, #-139]
+   0x2000068a <+364>:	add	sp, #176	; 0xb0
+   0x2000068c <+366>:	pop	{r7, pc}
+End of assembler dump.
