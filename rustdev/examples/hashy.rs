@@ -4,49 +4,22 @@
 pub extern crate max7800x_hal as hal;
 pub use hal::pac;
 pub use hal::entry;
+use panic_halt as _;
 use md5::{Md5, Digest};
-
-// pick a panicking behavior
-use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
-// use panic_abort as _; // requires nightly
-// use panic_itm as _; // logs messages over ITM; requires ITM support
-// use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
-// use cortex_m_semihosting::heprintln; // uncomment to use this for printing through semihosting
 
 #[entry]
 fn main() -> ! {
-    // heprintln!("Hello from semihosting!");
+    // Take ownership of the MAX78000 peripherals
     let p = pac::Peripherals::take().unwrap();
     let core = pac::CorePeripherals::take().unwrap();
-
+    // Constrain the Global Control Register (GCR) peripheral
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
+    // Initialize the Internal Primary Oscillator (IPO)
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
-    let clks = gcr.sys_clk
-        .set_source(&mut gcr.reg, &ipo)
-        .set_divider::<hal::gcr::clocks::Div1>(&mut gcr.reg)
-        .freeze();
-
-    // Initialize a delay timer using the ARM SYST (SysTick) peripheral
-    let rate = clks.sys_clk.frequency;
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
-
-    // Initialize and split the GPIO0 peripheral into pins
-    let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
-    // Configure UART to host computer with 115200 8N1 settings
-    let rx_pin = gpio0_pins.p0_0.into_af1();
-    let tx_pin = gpio0_pins.p0_1.into_af1();
-    let console = hal::uart::UartPeripheral::uart0(
-        p.uart0,
-        &mut gcr.reg,
-        rx_pin,
-        tx_pin
-    )
-        .baud(115200)
-        .clock_pclk(&clks.pclk)
-        .parity(hal::uart::ParityBit::None)
-        .build();
-
-    console.write_bytes(b"Hello, world!\r\n");
+    // Set the system clock to the IPO
+    let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
+    // Initialize a delay timer using the ARM SysTick peripheral
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clks.sys_clk.frequency);
 
     // Initialize the GPIO2 peripheral
     let pins = hal::gpio::Gpio2::new(p.gpio2, &mut gcr.reg).split();
@@ -77,13 +50,20 @@ fn main() -> ! {
     }
 
     // hashes
+    let h = b"hello world";
     let mut hasher = Md5::new();
-    hasher.update(b"hello world");
-    let hash = hasher.finalize();
-    eat a foot.
+    hasher.update(h);
+    let mut hash = hasher.finalize();
+    for i in 0..(64*1000) {
+        let mut hasher = Md5::new();
+        hasher.update(hash);
+        hasher.update(&[(i%256) as u8]);
+        hash = hasher.finalize();
+    }
+
 
     // LED blink loop
-    for _ in 0..3 {
+    loop {
         led_r.set_high();
         delay.delay_ms(500);
         led_g.set_high();
@@ -97,6 +77,4 @@ fn main() -> ! {
         led_b.set_low();
         delay.delay_ms(500);
     }
-
-
 }
