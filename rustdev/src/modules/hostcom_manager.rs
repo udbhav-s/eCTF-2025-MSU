@@ -37,6 +37,14 @@ pub struct ChannelInfo {
     pub end_timestamp: u64,
 }
 
+impl ChannelInfo {
+    /// Checks if the `ChannelInfo` instance is empty (all bytes are `0xFF`, the erased state).
+    pub fn is_empty(&self) -> bool {
+        let bytes: &[u8] = bytemuck::bytes_of(self);
+        bytes.iter().all(|&b| b == 0xFF)
+    }
+}
+
 pub fn read_ack<U: Read>(console: &mut U) -> Result<(), ()> {
     let mut buf = [0u8; 4];
     console.read_exact(&mut buf).map_err(|_| ())?;
@@ -102,16 +110,14 @@ pub fn write_channel<U: Write>(console: &mut U, channel: &ChannelInfo) -> Result
         .map_err(|_| ())
 }
 
-pub fn write_list<U: Write + Read>(console: &mut U, channel: &ChannelInfo) -> Result<(), ()> {
-    let channels: [&ChannelInfo; 1] = [channel];
-
+pub fn write_list<U: Write + Read>(console: &mut U, channels: &[ChannelInfo]) -> Result<(), ()> {
     let num_channels = channels.len() as u32;
     let channel_info_size = core::mem::size_of::<ChannelInfo>();
     let length = (size_of::<u32>() + channels.len() * channel_info_size) as u16;
 
     let hdr = MessageHeader {
-        magic: b'%',
-        opcode: b'L',
+        magic: MSG_MAGIC,
+        opcode: MsgType::List as u8,
         length,
     };
 
@@ -121,7 +127,7 @@ pub fn write_list<U: Write + Read>(console: &mut U, channel: &ChannelInfo) -> Re
 
     if read_ack(console).is_ok() {
         console.write_all(&num_channels.to_le_bytes()).ok();
-        for ch in &channels {
+        for ch in channels {
             write_channel(console, ch).map_err(|_| ())?;
         }
     }

@@ -52,5 +52,5 @@ ENTRYPOINT ["bash", "-c", "cargo build && cp target/thumbv7em-none-eabihf/debug/
 # docker build -t rust-firmware-builder .
 
 # Sample run command:
-# docker run --rm -v ./build_out:/out -v ./:/firmware -e EXAMPLE=blinky rust-firmware-builder
+# docker run --rm -v ./build_out:/out -v ./:/firmware rust-firmware-builder
 
