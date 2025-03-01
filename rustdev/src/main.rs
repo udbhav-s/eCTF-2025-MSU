@@ -4,38 +4,31 @@
 pub mod modules;
 
 pub extern crate max7800x_hal as hal;
-use modules::flash_manager::FlashManager;
+// use core::result;
+
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
+use modules::flash_manager::FlashManager;
+use modules::hostcom_manager::{
+    read_header, write_ack, write_debug, write_list, ChannelInfo, MsgType,
+};
 use panic_halt as _; // Import module from lib.rs
-
-use bytemuck::{Pod, Zeroable};
-
-// Example: define a subscription record.
-#[derive(Copy, Clone, Pod, Zeroable)]
-#[repr(C, packed)]
-struct ChannelInfo {
-    channel_id: u32,
-    start_timestamp: u64,
-    end_timestamp: u64,
-    key: u16,
-}
 
 #[entry]
 fn main() -> ! {
     // Take ownership of the MAX78000 peripherals
     let p = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
+    // let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
     // Initialize system peripherals and clocks
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral
-    let rate = clks.sys_clk.frequency;
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
+    // let rate = clks.sys_clk.frequency;
+    // let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
 
     // Initialize and split the GPIO0 peripheral into pins
     let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
@@ -51,8 +44,7 @@ fn main() -> ! {
     // Initialize the flash controller
     let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
     write!(console, "Flash controller initialized!\r\n").unwrap();
-
-    delay.delay_ms(1000);
+    // delay.delay_ms(1000);
 
     let mut sub_manager = FlashManager::new(flc);
 
@@ -60,7 +52,6 @@ fn main() -> ! {
         channel_id: 1,
         start_timestamp: 100,
         end_timestamp: 400,
-        key: 1,
     };
 
     let target_address = 0x1006_0000;
@@ -83,21 +74,25 @@ fn main() -> ! {
         write!(console, "Data written.\r\n").unwrap();
     }
 
-    let result = sub_manager.read_data::<ChannelInfo>(0x1006_0000);
-    match result {
-        Ok(read_sub) => write!(
-            console,
-            "Read subscription: channel_id: {}, start_timestamp: {}, end_timestamp: {}, key: {}\r\n",
-            read_sub.channel_id as u32,
-            read_sub.start_timestamp as u64,
-            read_sub.end_timestamp as u64,
-            read_sub.key as u16,
-        )
-        .unwrap(),
-        Err(err) => write!(console, "ERROR! Could not read subscription: {:?}\r\n", err).unwrap(),
-    };
-
     loop {
-        cortex_m::asm::nop();
+        match read_header(&mut console) {
+            Ok(hdr) => {
+                if hdr.opcode == MsgType::List as u8 {
+                    write_ack(&mut console).unwrap();
+                    write_debug(&mut console, "Hello from Rust!\n").unwrap();
+                    match sub_manager.read_data::<ChannelInfo>(0x1006_0000) {
+                        Ok(ch) => {
+                            write_list(&mut console, &ch).unwrap();
+                        }
+                        Err(_) => {}
+                    }
+                } else {
+                    let _ = console.write_all(b"We only support the List command right now!\n");
+                }
+            }
+            Err(_) => {
+                let _ = console.write_all(b"There was an error!\n");
+            }
+        }
     }
 }

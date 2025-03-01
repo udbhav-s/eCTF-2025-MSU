@@ -22,9 +22,5 @@ name = "eCTF_2025_MSU"
 test = false
 bench = false
 
-# [lib]
-# name = "ectf_2025_msu"   # We can change this
-# path = "src/lib.rs"      # Allows the examples to see the modules.
-
 # Uncomment if you want to use semihosting
 # cortex-m-semihosting = "0.5"
