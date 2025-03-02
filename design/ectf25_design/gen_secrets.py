@@ -11,40 +11,9 @@ Copyright: Copyright (c) 2025 The MITRE Corporation
 """
 
 import argparse
-import json
+from ectf25_design import gen_secrets
 from pathlib import Path
-
 from loguru import logger
-
-
-def gen_secrets(channels: list[int]) -> bytes:
-    """Generate the contents secrets file
-
-    This will be passed to the Encoder, ectf25_design.gen_subscription, and the build
-    process of the decoder
-
-    :param channels: List of channel numbers that will be valid in this deployment.
-        Channel 0 is the emergency broadcast, which will always be valid and will
-        NOT be included in this list
-
-    :returns: Contents of the secrets file
-    """
-    # TODO: Update this function to generate any system-wide secrets needed by
-    #   your design
-
-    # Create the secrets object
-    # You can change this to generate any secret material
-    # The secrets file will never be shared with attackers
-    secrets = {
-        "channels": channels,
-        "some_secrets": "EXAMPLE",
-    }
-
-    # NOTE: if you choose to use JSON for your file type, you will not be able to
-    # store binary data, and must either use a different file type or encode the
-    # binary data to hex, base64, or another type of ASCII-only encoding
-    return json.dumps(secrets).encode()
-
 
 def parse_args():
     """Define and parse the command line arguments
