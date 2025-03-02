@@ -3,15 +3,15 @@
 
 pub extern crate max7800x_hal as hal;
 
-pub use hal::pac;
-pub use hal::entry;
-use panic_halt as _;
 use bytemuck::{Pod, Zeroable};
+pub use hal::entry;
+pub use hal::pac;
+use panic_halt as _;
 
 // embedded_io API allows usage of core macros like `write!`
 use embedded_io::{Read, Write};
 
-const MSG_MAGIC: u8 = b'%'; 
+const MSG_MAGIC: u8 = b'%';
 
 // Ref: https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
 #[repr(u8)]
@@ -44,7 +44,7 @@ struct ChannelInfo {
 fn read_ack<U: Read>(console: &mut U) -> Result<(), ()> {
     let mut buf = [0u8; 4];
     console.read_exact(&mut buf).map_err(|_| ())?;
-    
+
     if buf[0] != MSG_MAGIC || buf[1] != MsgType::Ack as u8 {
         return Err(());
     }
@@ -60,29 +60,38 @@ fn write_ack<U: Write>(console: &mut U) -> Result<(), ()> {
 
 fn read_header<U: Read>(console: &mut U) -> Result<MessageHeader, ()> {
     let mut hdr = MessageHeader::zeroed();
-    
-    while console.read_exact(core::slice::from_mut(&mut hdr.magic)).is_ok() {
+
+    while console
+        .read_exact(core::slice::from_mut(&mut hdr.magic))
+        .is_ok()
+    {
         if hdr.magic == MSG_MAGIC {
             break;
         }
     }
 
-    console.read_exact(core::slice::from_mut(&mut hdr.opcode)).map_err(|_| ())?;
-    console.read_exact(&mut hdr.length.to_le_bytes()).map_err(|_| ())?;
+    console
+        .read_exact(core::slice::from_mut(&mut hdr.opcode))
+        .map_err(|_| ())?;
+    console
+        .read_exact(&mut hdr.length.to_le_bytes())
+        .map_err(|_| ())?;
 
     Ok(hdr)
 }
 
 fn write_debug<U: Write + Read>(console: &mut U, msg: &str) -> Result<(), ()> {
     let bytes = msg.as_bytes();
-    
+
     // Send debug message header
     let hdr = MessageHeader {
         magic: MSG_MAGIC,
         opcode: MsgType::Debug as u8,
-        length: bytes.len() as u16
+        length: bytes.len() as u16,
     };
-    console.write_all(bytemuck::bytes_of(&hdr)).map_err(|_| ())?;
+    console
+        .write_all(bytemuck::bytes_of(&hdr))
+        .map_err(|_| ())?;
 
     // Debug messages are not sent an ACK, so we don't send them in chunks
     // Send entire message at once
@@ -92,23 +101,39 @@ fn write_debug<U: Write + Read>(console: &mut U, msg: &str) -> Result<(), ()> {
 }
 
 fn write_channel<U: Write>(console: &mut U, channel: &ChannelInfo) -> Result<(), ()> {
-    console.write_all(bytemuck::bytes_of(channel)).map_err(|_| ())
+    console
+        .write_all(bytemuck::bytes_of(channel))
+        .map_err(|_| ())
 }
 
 fn write_list<U: Write + Read>(console: &mut U) -> Result<(), ()> {
     let channels: [ChannelInfo; 2] = [
-        ChannelInfo { channel_id: 1, start_timestamp: 100, end_timestamp: 23230000 },
-        ChannelInfo { channel_id: 2, start_timestamp: 500, end_timestamp: 4200 },
+        ChannelInfo {
+            channel_id: 1,
+            start_timestamp: 100,
+            end_timestamp: 23230000,
+        },
+        ChannelInfo {
+            channel_id: 2,
+            start_timestamp: 500,
+            end_timestamp: 4200,
+        },
     ];
 
     let num_channels = channels.len() as u32;
     let channel_info_size = core::mem::size_of::<ChannelInfo>();
     let length = (size_of::<u32>() + channels.len() * channel_info_size) as u16;
 
-    let hdr = MessageHeader { magic: b'%', opcode: b'L', length };
-    
-    console.write_all(bytemuck::bytes_of(&hdr)).map_err(|_| ())?;
-    
+    let hdr = MessageHeader {
+        magic: b'%',
+        opcode: b'L',
+        length,
+    };
+
+    console
+        .write_all(bytemuck::bytes_of(&hdr))
+        .map_err(|_| ())?;
+
     if read_ack(console).is_ok() {
         console.write_all(&num_channels.to_le_bytes()).ok();
         for ch in &channels {
@@ -118,7 +143,6 @@ fn write_list<U: Write + Read>(console: &mut U) -> Result<(), ()> {
 
     Ok(())
 }
-
 
 #[entry]
 fn main() -> ! {
@@ -135,12 +159,13 @@ fn main() -> ! {
     // Configure UART to host computer with 115200 8N1 settings
     let rx_pin = gpio0_pins.p0_0.into_af1();
     let tx_pin = gpio0_pins.p0_1.into_af1();
-    let mut console: hal::uart::BuiltUartPeripheral<pac::Uart0, hal::gpio::Pin<0, 0, hal::gpio::Af1>, hal::gpio::Pin<0, 1, hal::gpio::Af1>, (), ()> = hal::uart::UartPeripheral::uart0(
-        p.uart0,
-        &mut gcr.reg,
-        rx_pin,
-        tx_pin
-    )
+    let mut console: hal::uart::BuiltUartPeripheral<
+        pac::Uart0,
+        hal::gpio::Pin<0, 0, hal::gpio::Af1>,
+        hal::gpio::Pin<0, 1, hal::gpio::Af1>,
+        (),
+        (),
+    > = hal::uart::UartPeripheral::uart0(p.uart0, &mut gcr.reg, rx_pin, tx_pin)
         .baud(115200)
         .clock_pclk(&clks.pclk)
         .parity(hal::uart::ParityBit::None)
