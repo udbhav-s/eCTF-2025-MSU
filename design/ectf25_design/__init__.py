@@ -113,9 +113,12 @@ class ChannelKeyDerivation:
             traversal = []
             n = node_num
             # Traverse to root
-            while n > 0:
+            while n > 1:
                 traversal.append(n % 2)
                 n = n // 2
+
+            # print(f"Traversal for {node_num}")
+            # print(traversal[::-1])
 
             # Traverse from root, generating subkeys along the way 
             curr_key = self.root    

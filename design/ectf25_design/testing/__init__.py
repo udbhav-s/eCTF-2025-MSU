@@ -163,17 +163,23 @@ class TestGenSubscription(unittest.TestCase):
         deriv = ChannelKeyDerivation(root=b"1234", height=h)
 
         # Test that for full range, traversing to any leaf gives the corresponding key for that frame
-        curr_key = deriv.root;
-        node_num = 1
-        steps = random.randint(0, 64)
-        for _ in range(steps):
-            choice = random.randint(0, 1)
-            if choice == 0:
-                curr_key = deriv.get_left_subkey(curr_key)
-                node_num = node_num * 2
-            else:
-                curr_key = deriv.get_right_subkey(curr_key)
-                node_num = node_num * 2 + 1
+        for _ in range(100):
+            curr_key = deriv.root;
+            node_num = 1
+            steps = random.randint(0, h)
+            # traversal = []
+            for _ in range(steps):
+                choice = random.randint(0, 1)
+                # traversal.append(choice)
+                if choice == 0:
+                    curr_key = deriv.get_left_subkey(curr_key)
+                    node_num = node_num * 2
+                else:
+                    curr_key = deriv.get_right_subkey(curr_key)
+                    node_num = node_num * 2 + 1
+
+        # print(f"Test traversal for {node_num}:")
+        # print(traversal)
 
         channel_key = deriv.generate_keys_from_node_cover([node_num])[0]
         self.assertEqual(channel_key, ChannelTreeNode(node_num, curr_key))
