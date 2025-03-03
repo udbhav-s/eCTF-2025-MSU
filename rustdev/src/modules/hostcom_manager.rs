@@ -1,5 +1,7 @@
 // Re-export the HAL and panic handler as needed.
 pub extern crate max7800x_hal as hal;
+use crate::modules::channel_manager::read_channel;
+use crate::modules::flash_manager::FlashManager;
 use bytemuck::{Pod, Zeroable};
 // embedded_io API allows usage of core macros like `write!`
 use embedded_io::{Read, Write};
@@ -43,14 +45,6 @@ pub struct ChannelInfo {
     pub channel_id: u32,
     pub start_timestamp: u64,
     pub end_timestamp: u64,
-}
-
-impl ChannelInfo {
-    /// Checks if the `ChannelInfo` instance is empty (all bytes are `0xFF`, the erased state).
-    pub fn is_empty(&self) -> bool {
-        let bytes: &[u8] = bytemuck::bytes_of(self);
-        bytes.iter().all(|&b| b == 0xFF)
-    }
 }
 
 pub fn read_ack<U: Read>(console: &mut U) -> Result<(), ()> {
@@ -157,10 +151,21 @@ pub fn write_channel<U: Write>(console: &mut U, channel: &ChannelInfo) -> Result
         .map_err(|_| ())
 }
 
-pub fn write_list<U: Write + Read>(console: &mut U, channels: &[ChannelInfo]) -> Result<(), ()> {
-    let num_channels = channels.len() as u32;
+pub fn write_list<U: Write + Read>(
+    console: &mut U,
+    flash_manager: &mut FlashManager,
+) -> Result<(), ()> {
+    let mut count = 0;
+    for i in 0..8 {
+        let addr = 0x1006_0000 + (i as u32 * 0x2000);
+        let magic = flash_manager.read_magic(addr).unwrap();
+        if magic == 0xABCD {
+            count += 1;
+        }
+    }
+
     let channel_info_size = core::mem::size_of::<ChannelInfo>();
-    let length = (size_of::<u32>() + channels.len() * channel_info_size) as u16;
+    let length = (size_of::<u32>() + count * channel_info_size) as u16;
 
     let hdr = MessageHeader {
         magic: MSG_MAGIC,
@@ -173,9 +178,11 @@ pub fn write_list<U: Write + Read>(console: &mut U, channels: &[ChannelInfo]) ->
         .map_err(|_| ())?;
 
     if read_ack(console).is_ok() {
-        console.write_all(&num_channels.to_le_bytes()).ok();
-        for ch in channels {
-            write_channel(console, ch).map_err(|_| ())?;
+        console.write_all(&count.to_le_bytes()).ok();
+        for i in 0..count {
+            let addr = 0x1006_0000 + (i as u32 * 0x2000);
+            let ch = read_channel(flash_manager, addr).unwrap();
+            write_channel(console, &ch).map_err(|_| ())?;
         }
     }
 

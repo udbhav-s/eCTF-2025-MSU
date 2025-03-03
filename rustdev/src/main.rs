@@ -10,7 +10,7 @@ pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
-use modules::channel_manager::{read_all_channels, save_subscription};
+use modules::channel_manager::save_subscription;
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
     read_body, read_header, write_ack, write_debug, write_list, MsgType,
@@ -21,14 +21,14 @@ use panic_halt as _; // Import module from lib.rs
 fn main() -> ! {
     // Take ownership of the MAX78000 peripherals
     let p = pac::Peripherals::take().unwrap();
-    // let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
+    let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
     // Initialize system peripherals and clocks
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral
-    // let rate = clks.sys_clk.frequency;
-    // let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
+    let rate = clks.sys_clk.frequency;
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
 
     // Initialize and split the GPIO0 peripheral into pins
     let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
@@ -44,7 +44,7 @@ fn main() -> ! {
     // Initialize the flash controller
     let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
     write!(console, "Flash controller initialized!\r\n").unwrap();
-    // delay.delay_ms(1000);
+    delay.delay_ms(1000);
 
     let mut flash_manager = FlashManager::new(flc);
 
@@ -54,12 +54,7 @@ fn main() -> ! {
                 if hdr.opcode == MsgType::List as u8 {
                     write_ack(&mut console).unwrap();
                     write_debug(&mut console, "List section in rust\n").unwrap();
-                    match read_all_channels(&mut flash_manager, 0x1006_0000) {
-                        Ok(channels) => {
-                            write_list(&mut console, &channels).unwrap();
-                        }
-                        Err(_) => {}
-                    }
+                    write_list(&mut console, &mut flash_manager).unwrap();
                 } else if hdr.opcode == MsgType::Subscribe as u8 {
                     write_ack(&mut console).unwrap();
                     match read_body(&mut console, hdr.length) {
