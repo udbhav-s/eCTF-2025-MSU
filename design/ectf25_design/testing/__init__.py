@@ -3,12 +3,13 @@
 
 import unittest
 import json
-from ectf25_design import gen_secrets
+import random
+from ectf25_design import gen_secrets, ChannelKeyDerivation, ChannelTreeNode
 from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
 from Crypto.Hash import SHA512
 from ectf25_design import Secrets
-from typing import List
+from typing import List, Tuple
 
 def get_secrets(channels = [1, 3, 4]) -> Secrets:
     return json.loads(gen_secrets(channels).decode())
@@ -48,7 +49,7 @@ class TestGenSecrets(unittest.TestCase):
             # Generate random channel numbers
             test_channels: List[int] = []
             for _ in range(num_channels):
-                channel = random.randint(1, 2**31-1)
+                channel = random.randint(1, 2**32-1)
                 test_channels.append(channel)
 
             secrets = get_secrets(test_channels)
@@ -100,6 +101,59 @@ class TestGenSecrets(unittest.TestCase):
         wrong_signature = signature[:-1] + bytes([signature[-1] ^ 1])
         with self.assertRaises(ValueError):
             verifier.verify(message_hash, wrong_signature)
+    
+class TestGenSubscription(unittest.TestCase):
+    def test_get_node_cover(self):
+        h = 64
+        deriv = ChannelKeyDerivation(root=b"1234", height=h)
+
+        end = 2**h - 1
+
+        # Left subtrees at successive depths
+        for i in range(0, 8):
+            self.assertEqual(deriv.get_channel_node_cover(2**i), (0, 2**(h-i) - 1))
+        
+        # Right subtrees at successive depths
+        for i in range(0, 8):
+            span = 2**(h - i)
+            self.assertEqual(deriv.get_channel_node_cover(2**(i+1) - 1), (end - span + 1, end))
+        
+        # Left subtree of right subtree
+        span = 2**(h - 2)
+        self.assertEqual(deriv.get_channel_node_cover(6), (span*2, end - span))
+    
+    def test_generate_channel_keys(self):
+        random.seed(0xdeadbeef)
+
+        h = 64
+        deriv = ChannelKeyDerivation(root=b"1234", height=h)
+
+        test_ranges: List[Tuple[int, int]] = [
+            # Full range
+            (0, 2**h - 1),
+            # Left subtree at depth 2
+            (0, 2**(h-2) - 1),
+            # Last two frames (bottom right most subtree)
+            (2**h - 2, 2**h - 1)
+        ]
+
+        for r in test_ranges:
+            start, end = r
+            cover = deriv.get_covering_nodes(start, end)
+            self.assertEqual(deriv.get_channel_nodes_cover(cover), (start, end))
+
+        password_counts = []
+        
+        # Test random ranges
+        for _ in range(1000):
+            start = random.randint(0, 2**h - 1)
+            end = start + random.randint(0, 2**h - 1 - start)
+            cover = deriv.get_covering_nodes(start, end)
+            password_counts.append(len(cover))
+            self.assertEqual(deriv.get_channel_nodes_cover(cover), (start, end))
+        
+        print("Number of passwords needed to cover 1000 random frame ranges:")
+        print(password_counts)
 
 if __name__ == '__main__':
     unittest.main()
