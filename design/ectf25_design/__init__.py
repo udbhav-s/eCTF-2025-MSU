@@ -48,7 +48,7 @@ class ChannelKeyDerivation:
 
         return tuple(cover)
     
-    def get_covering_nodes(self, start: int, end: int) -> List[ChannelTreeNode]:
+    def get_covering_nodes(self, start: int, end: int) -> List[int]:
         """Returns a list of node numbers that cover the given range of frames (start and end inclusive)
         """
         nodes = []
@@ -97,6 +97,10 @@ class ChannelKeyDerivation:
                 iter_node += 1
 
         return nodes
+
+    def get_channel_keys(self, start: int, end: int) -> List[ChannelTreeNode]:
+        pass
+    
 
 
 def gen_secrets(channels: list[int]) -> bytes:
