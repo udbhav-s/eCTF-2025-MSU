@@ -46,11 +46,11 @@ ENV PATH="/root/.cargo/bin:$PATH"
 ENV CARGO_TARGET_DIR=/decoder/target
 
 # Define build process
-ENTRYPOINT ["bash", "-c", "cargo build && cp target/thumbv7em-none-eabihf/debug/eCTF_2025_MSU /out/eCTF_2025_MSU.elf && arm-none-eabi-objcopy -O binary /out/eCTF_2025_MSU.elf /out/eCTF_2025_MSU.bin"]
+ENTRYPOINT ["bash", "-c", "cargo build -q && cp target/thumbv7em-none-eabihf/debug/eCTF_2025_MSU /out/eCTF_2025_MSU.elf && arm-none-eabi-objcopy -O binary /out/eCTF_2025_MSU.elf /out/eCTF_2025_MSU.bin"]
 
 # Build:
 # docker build -t rust-firmware-builder .
 
 # Sample run command:
-# docker run --rm -v ./build_out:/out -v ./:/firmware rust-firmware-builder
+# docker run --rm -v ./build_out:/out -v ./:/decoder rust-firmware-builder
 
