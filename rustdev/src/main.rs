@@ -13,7 +13,8 @@ pub use hal::pac;
 use modules::channel_manager::save_subscription;
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
-    read_body, read_header, write_ack, write_debug, write_list, MsgType,
+    read_ack, read_body, read_header, write_ack, write_debug, write_list, MessageHeader, MsgType,
+    MSG_MAGIC,
 };
 use panic_halt as _; // Import module from lib.rs
 
@@ -59,7 +60,40 @@ fn main() -> ! {
                     write_ack(&mut console).unwrap();
                     match read_body(&mut console, hdr.length) {
                         Ok(body) => {
+                            let hdr = MessageHeader {
+                                magic: MSG_MAGIC,
+                                opcode: MsgType::Subscribe as u8,
+                                length: 0,
+                            };
+
+                            if console.write_all(bytemuck::bytes_of(&hdr)).is_err() {
+                                continue;
+                            }
+
+                            if read_ack(&mut console).is_ok() {
+                                console.write_all(&[]).ok();
+                            }
                             let _ = save_subscription(&mut flash_manager, body);
+                        }
+                        Err(_) => (),
+                    };
+                } else if hdr.opcode == MsgType::Decode as u8 {
+                    write_ack(&mut console).unwrap();
+                    match read_body(&mut console, hdr.length) {
+                        Ok(body) => {
+                            let hdr = MessageHeader {
+                                magic: MSG_MAGIC,
+                                opcode: MsgType::Decode as u8,
+                                length: hdr.length - 12,
+                            };
+
+                            if console.write_all(bytemuck::bytes_of(&hdr)).is_err() {
+                                continue;
+                            }
+
+                            if read_ack(&mut console).is_ok() {
+                                console.write_all(&body.data[12..]).ok();
+                            }
                         }
                         Err(_) => (),
                     };
