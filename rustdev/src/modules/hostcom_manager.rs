@@ -28,6 +28,14 @@ pub struct MessageHeader {
     pub length: u16,
 }
 
+/// Message body for protocol packets.
+#[repr(C, packed)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct MessageBody {
+    pub data: [u8; 1024],
+    pub length: u16,
+}
+
 /// Channel information used in list messages.
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -77,11 +85,50 @@ pub fn read_header<U: Read>(console: &mut U) -> Result<MessageHeader, ()> {
     console
         .read_exact(core::slice::from_mut(&mut hdr.opcode))
         .map_err(|_| ())?;
-    console
-        .read_exact(&mut hdr.length.to_le_bytes())
-        .map_err(|_| ())?;
+
+    let mut length_bytes = [0u8; 2];
+    console.read_exact(&mut length_bytes).map_err(|_| ())?;
+    hdr.length = u16::from_le_bytes(length_bytes);
 
     Ok(hdr)
+}
+
+pub fn read_body<U: Read + Write>(console: &mut U, length: u16) -> Result<MessageBody, ()> {
+    let mut body = MessageBody::zeroed();
+    let mut offset = 0usize;
+    let total_length = length as usize;
+    let mut chunk = [0u8; 256];
+
+    while offset < total_length {
+        let bytes_to_read = core::cmp::min(256, total_length - offset);
+        // Read the next chunk (exactly bytes_to_read bytes)
+        console
+            .read_exact(&mut chunk[..bytes_to_read])
+            .map_err(|_| ())?;
+        // Copy the chunk into our message body buffer at the correct offset.
+        body.data[offset..offset + bytes_to_read].copy_from_slice(&chunk[..bytes_to_read]);
+        offset += bytes_to_read;
+        // Acknowledge receipt of this chunk.
+        write_ack(console).map_err(|_| ())?;
+    }
+
+    let hdr = MessageHeader {
+        magic: MSG_MAGIC,
+        opcode: MsgType::Subscribe as u8,
+        length: 0,
+    };
+
+    console
+        .write_all(bytemuck::bytes_of(&hdr))
+        .map_err(|_| ())?;
+
+    if read_ack(console).is_ok() {
+        console.write_all(&[]).ok();
+    }
+
+    // Record the length of the received body.
+    body.length = length;
+    Ok(body)
 }
 
 pub fn write_debug<U: Write + Read>(console: &mut U, msg: &str) -> Result<(), ()> {

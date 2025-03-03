@@ -4,7 +4,6 @@
 pub mod modules;
 
 pub extern crate max7800x_hal as hal;
-// use core::result;
 
 use bytemuck::Zeroable;
 use embedded_io::Write;
@@ -14,13 +13,13 @@ pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
-    read_header, write_ack, write_debug, write_list, ChannelInfo, MsgType,
+    read_body, read_header, write_ack, write_debug, write_list, ChannelInfo, MsgType,
 };
 use panic_halt as _; // Import module from lib.rs
 
 pub const PAGE_SIZE: u32 = 0x2000;
 pub const NUM_PAGES: usize = 8;
-pub const BASE_ADDRESS: u32 = 0x1006_2000;
+pub const BASE_ADDRESS: u32 = 0x1006_0000;
 
 fn read_all_channels(
     sub_manager: &mut FlashManager, // or whatever type provides `read_data`
@@ -45,14 +44,14 @@ fn read_all_channels(
 fn main() -> ! {
     // Take ownership of the MAX78000 peripherals
     let p = pac::Peripherals::take().unwrap();
-    // let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
+    let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
     // Initialize system peripherals and clocks
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral
-    // let rate = clks.sys_clk.frequency;
-    // let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
+    let rate = clks.sys_clk.frequency;
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
 
     // Initialize and split the GPIO0 peripheral into pins
     let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
@@ -68,55 +67,101 @@ fn main() -> ! {
     // Initialize the flash controller
     let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
     write!(console, "Flash controller initialized!\r\n").unwrap();
-    // delay.delay_ms(1000);
+    delay.delay_ms(1000);
 
     let mut sub_manager = FlashManager::new(flc);
 
-    for i in 0..7 {
-        let target_address = BASE_ADDRESS + (i as u32 * PAGE_SIZE);
-        let target_page_num = i + 1;
+    // for i in 0..7 {
+    //     let target_address = BASE_ADDRESS + (i as u32 * PAGE_SIZE);
+    //     let target_page_num = i + 1;
 
-        // Wipe the page
-        let result = sub_manager.wipe_data(target_address);
-        match result {
-            Ok(_) => write!(console, "Page {} erased\r\n", target_page_num).unwrap(),
-            Err(err) => write!(
-                console,
-                "ERROR! Could not erase page {}: {:?}\r\n",
-                target_page_num, err
-            )
-            .unwrap(),
-        };
+    //     // Wipe the page
+    //     let result = sub_manager.wipe_data(target_address);
+    //     match result {
+    //         Ok(_) => write!(console, "Page {} erased\r\n", target_page_num).unwrap(),
+    //         Err(err) => write!(
+    //             console,
+    //             "ERROR! Could not erase page {}: {:?}\r\n",
+    //             target_page_num, err
+    //         )
+    //         .unwrap(),
+    //     };
 
-        // Create a different ChannelInfo for each page (modify as needed)
-        let sub = ChannelInfo {
-            channel_id: i as u32 + 1,
-            start_timestamp: 1000 * (i as u64),
-            end_timestamp: 2000 * (i as u64),
-        };
+    //     // Create a different ChannelInfo for each page (modify as needed)
+    //     let sub = ChannelInfo {
+    //         channel_id: i as u32 + 1,
+    //         start_timestamp: 1000 * (i as u64),
+    //         end_timestamp: 2000 * (i as u64),
+    //     };
 
-        // Write data and handle potential error
-        if let Err(e) = sub_manager.write_data(target_address, &sub) {
-            write!(
-                console,
-                "Error writing data to page {}: {:?}\r\n",
-                target_page_num, e
-            )
-            .unwrap();
-        } else {
-            write!(console, "Data written to page {}.\r\n", target_page_num).unwrap();
-        }
-    }
+    //     // Write data and handle potential error
+    //     if let Err(e) = sub_manager.write_data(target_address, &sub) {
+    //         write!(
+    //             console,
+    //             "Error writing data to page {}: {:?}\r\n",
+    //             target_page_num, e
+    //         )
+    //         .unwrap();
+    //     } else {
+    //         write!(console, "Data written to page {}.\r\n", target_page_num).unwrap();
+    //     }
+    // }
 
     loop {
         match read_header(&mut console) {
             Ok(hdr) => {
                 if hdr.opcode == MsgType::List as u8 {
                     write_ack(&mut console).unwrap();
-                    write_debug(&mut console, "Hello from Rust!\n").unwrap();
+                    write_debug(&mut console, "List section in rust\n").unwrap();
                     match read_all_channels(&mut sub_manager, 0x1006_0000) {
                         Ok(channels) => {
                             write_list(&mut console, &channels).unwrap();
+                        }
+                        Err(_) => {}
+                    }
+                } else if hdr.opcode == MsgType::Subscribe as u8 {
+                    write_ack(&mut console).unwrap();
+                    match read_body(&mut console, hdr.length) {
+                        Ok(body) => {
+                            // Convert the last 4 bytes into a u32, 8 bytes into a u64, etc.
+                            let channel_id = u32::from_le_bytes(
+                                body.data[(body.length - 4) as usize..body.length as usize]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            let end_timestamp = u64::from_le_bytes(
+                                body.data[(body.length - 12) as usize..(body.length - 4) as usize]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            let start_timestamp = u64::from_le_bytes(
+                                body.data[(body.length - 20) as usize..(body.length - 12) as usize]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+
+                            let sub = ChannelInfo {
+                                channel_id,
+                                start_timestamp,
+                                end_timestamp,
+                            };
+
+                            let result = sub_manager.wipe_data(BASE_ADDRESS);
+                            match result {
+                                Ok(_) => write!(console, "Page {} erased\r\n", 48).unwrap(),
+                                Err(err) => write!(
+                                    console,
+                                    "ERROR! Could not erase page {}: {:?}\r\n",
+                                    48, err
+                                )
+                                .unwrap(),
+                            };
+                            if let Err(e) = sub_manager.write_data(BASE_ADDRESS, &sub) {
+                                write!(console, "Error writing data to page {}: {:?}\r\n", 48, e)
+                                    .unwrap();
+                            } else {
+                                write!(console, "Data written to page {}.\r\n", 48).unwrap();
+                            }
                         }
                         Err(_) => {}
                     }
