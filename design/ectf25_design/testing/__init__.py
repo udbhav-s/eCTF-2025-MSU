@@ -122,7 +122,7 @@ class TestGenSubscription(unittest.TestCase):
         span = 2**(h - 2)
         self.assertEqual(deriv.get_channel_node_cover(6), (span*2, end - span))
     
-    def test_generate_channel_keys(self):
+    def test_get_covering_nodes(self):
         random.seed(0xdeadbeef)
 
         h = 64
@@ -145,7 +145,8 @@ class TestGenSubscription(unittest.TestCase):
         password_counts = []
         
         # Test random ranges
-        for _ in range(1000):
+        rounds = 1000
+        for _ in range(rounds):
             start = random.randint(0, 2**h - 1)
             end = start + random.randint(0, 2**h - 1 - start)
             cover = deriv.get_covering_nodes(start, end)
@@ -154,6 +155,29 @@ class TestGenSubscription(unittest.TestCase):
         
         print("Number of passwords needed to cover 1000 random frame ranges:")
         print(password_counts)
+
+    def test_generate_keys_from_node_cover(self):
+        random.seed(0xdeafbeef)
+
+        h = 64
+        deriv = ChannelKeyDerivation(root=b"1234", height=h)
+
+        # Test that for full range, traversing to any leaf gives the corresponding key for that frame
+        curr_key = deriv.root;
+        node_num = 1
+        steps = random.randint(0, 64)
+        for _ in range(steps):
+            choice = random.randint(0, 1)
+            if choice == 0:
+                curr_key = deriv.get_left_subkey(curr_key)
+                node_num = node_num * 2
+            else:
+                curr_key = deriv.get_right_subkey(curr_key)
+                node_num = node_num * 2 + 1
+
+        channel_key = deriv.generate_keys_from_node_cover([node_num])[0]
+        self.assertEqual(channel_key, ChannelTreeNode(node_num, curr_key))
+
 
 if __name__ == '__main__':
     unittest.main()

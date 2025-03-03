@@ -1,6 +1,7 @@
 import json
 from Crypto.Random import get_random_bytes
 from Crypto.PublicKey import ECC
+from Crypto.Hash import MD5
 from typing import TypedDict, Dict, Tuple, List
 from dataclasses import dataclass
 
@@ -85,7 +86,8 @@ class ChannelKeyDerivation:
                 if not in_range(self.get_channel_node_cover(iter_node), decode_range):
                     descending = True
             else:
-                assert(get_left_child(iter_node) < 2**(self.height + 1), "Invariant: Left child should not go out of tree")
+                # Invariant: Left child should not go out of tree
+                assert(get_left_child(iter_node) < 2**(self.height + 1))
 
                 iter_node = get_left_child(iter_node)
                 while not in_range(self.get_channel_node_cover(iter_node), decode_range):
@@ -97,10 +99,43 @@ class ChannelKeyDerivation:
                 iter_node += 1
 
         return nodes
+    
+    def get_left_subkey(self, key: bytes):
+        return MD5.new(key + b"L").digest()
+    
+    def get_right_subkey(self, key: bytes):
+        return MD5.new(key + b"R").digest()
+    
+    def generate_keys_from_node_cover(self, node_numbers: List[int]) -> List[ChannelTreeNode]:
+        nodes = []
+
+        for node_num in node_numbers:
+            traversal = []
+            n = node_num
+            # Traverse to root
+            while n > 0:
+                traversal.append(n % 2)
+                n = n // 2
+
+            # Traverse from root, generating subkeys along the way 
+            curr_key = self.root    
+            for t in traversal[::-1]:
+                if t == 0:
+                    curr_key = self.get_left_subkey(curr_key)
+                else:
+                    curr_key = self.get_right_subkey(curr_key)
+                
+            nodes.append(ChannelTreeNode(node_num=node_num, key=curr_key))
+        
+        return nodes
 
     def get_channel_keys(self, start: int, end: int) -> List[ChannelTreeNode]:
-        pass
-    
+        """Takes a timestamp range, and generates a list of tree nodes with keys that cover that range
+        """
+
+        node_numbers = self.get_covering_nodes(start, end)
+        return self.generate_keys_from_node_cover(node_numbers)
+
 
 
 def gen_secrets(channels: list[int]) -> bytes:
