@@ -1,7 +1,5 @@
-use crate::modules::flash_manager::{FlashError, FlashManager};
+use crate::modules::flash_manager::{FlashError, FlashManager, MyFlashError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody};
-
-use super::flash_manager::MyFlashError;
 
 // const PAGE_SIZE: u32 = 0x2000;
 // const NUM_PAGES: usize = 8;

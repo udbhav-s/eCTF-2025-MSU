@@ -106,20 +106,6 @@ pub fn read_body<U: Read + Write>(console: &mut U, length: u16) -> Result<Messag
         write_ack(console).map_err(|_| ())?;
     }
 
-    let hdr = MessageHeader {
-        magic: MSG_MAGIC,
-        opcode: MsgType::Subscribe as u8,
-        length: 0,
-    };
-
-    console
-        .write_all(bytemuck::bytes_of(&hdr))
-        .map_err(|_| ())?;
-
-    if read_ack(console).is_ok() {
-        console.write_all(&[]).ok();
-    }
-
     // Record the length of the received body.
     body.length = length;
     Ok(body)
