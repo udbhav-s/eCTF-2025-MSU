@@ -86,7 +86,7 @@ def gen_subscription(
     header_bytes += nonce
 
     # Load the host key and create signer
-    host_key = ECC.import_key(secrets["host_key"])
+    host_key = ECC.import_key(bytes.fromhex(secrets["host_key"]))
     signer = eddsa.new(host_key, 'rfc8032')
 
     sign_contents = header_bytes + passwords_enc_bytes

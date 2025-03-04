@@ -9,7 +9,7 @@ from dataclasses import dataclass
 class Secrets(TypedDict):
     channels: Dict[str, str]  # Maps channel IDs to hex-encoded 16-byte secrets
     decoder_dk: str  # Hex-encoded 32-byte decoder key
-    host_key: str  # PEM-encoded Ed25519 host key
+    host_key: str  # Ed25519 host key in DER encoded as hex
 
 @dataclass
 class ChannelTreeNode:
@@ -224,13 +224,13 @@ def gen_secrets(channels: list[int]) -> bytes:
     decoder_dk = get_random_bytes(32).hex()
 
     host_key = ECC.generate(curve='Ed25519')
-    host_key_pem = host_key.export_key(format='PEM')
+    host_key_der = host_key.export_key(format='DER').hex()
 
     # Create the secrets object
     secrets: Secrets = {
         "channels": channel_secrets,
         "decoder_dk": decoder_dk,
-        "host_key": host_key_pem
+        "host_key": host_key_der
     }
 
     return json.dumps(secrets).encode()
