@@ -1,12 +1,13 @@
 import json
 from Crypto.Random import get_random_bytes
 from Crypto.PublicKey import ECC
-from Crypto.Hash import MD5
+from Crypto.Hash import MD5, SHA512
+from Crypto.Protocol.KDF import HKDF
 from typing import TypedDict, Dict, Tuple, List
 from dataclasses import dataclass
 
 class Secrets(TypedDict):
-    channels: Dict[int, str]  # Maps channel IDs to hex-encoded 16-byte secrets
+    channels: Dict[str, str]  # Maps channel IDs to hex-encoded 16-byte secrets
     decoder_dk: str  # Hex-encoded 32-byte decoder key
     host_key: str  # PEM-encoded Ed25519 host key
 
@@ -195,6 +196,10 @@ class ChannelKeyDerivation:
 
         return curr_key
 
+
+def get_decoder_key(decoder_dk: bytes, decoder_id: int):
+    decoder_id_bytes = decoder_id.to_bytes(length=4, byteorder='little')
+    return HKDF(master=decoder_dk, key_len=32, hashmod=SHA512, context=decoder_id_bytes, salt='')
 
 
 def gen_secrets(channels: list[int]) -> bytes:

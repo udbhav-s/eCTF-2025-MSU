@@ -4,7 +4,9 @@
 import unittest
 import json
 import random
+import struct
 from ectf25_design import gen_secrets, ChannelKeyDerivation, ChannelTreeNode
+from ectf25_design.gen_subscription import gen_subscription
 from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
 from Crypto.Hash import SHA512
@@ -102,7 +104,7 @@ class TestGenSecrets(unittest.TestCase):
         with self.assertRaises(ValueError):
             verifier.verify(message_hash, wrong_signature)
     
-class TestGenSubscription(unittest.TestCase):
+class TestKeyGeneration(unittest.TestCase):
     def test_get_node_cover(self):
         """Test that function to get a cover for a node is correct"""
         h = 64
@@ -240,6 +242,79 @@ class TestGenSubscription(unittest.TestCase):
                         frame = random.randint(end+1, 2**h - 1)
                         with self.assertRaises(Exception):
                             deriv.get_frame_key_from_cover(keys, frame)
+
+class TestGenSubscription(unittest.TestCase):
+    def setUp(self):
+        """Set up test environment with secrets and test parameters"""
+        random.seed(0xdedbeef)
+
+        self.secrets = get_secrets()
+
+        self.device_id = 12345
+        self.start = 0
+        self.end = 1000
+        self.channel = int(random.choice(list(self.secrets["channels"].keys())))
+        self.host_key = ECC.import_key(self.secrets["host_key"])
+    
+    def test_subscription_package_size(self):
+        """Test that subscription package has correct size"""
+        secrets_bytes = json.dumps(self.secrets).encode()
+        package = gen_subscription(secrets_bytes, self.device_id, self.start, self.end, self.channel)
+        
+        # Expected size: 36 byte header + 25*128 byte encrypted body + 64 byte signature
+        expected_size = 36 + (25 * 128) + 64
+        self.assertEqual(len(package), expected_size, 
+                        f"Package size {len(package)} does not match expected {expected_size}")
+    
+    def test_subscription_header_parsing(self):
+        """Test that subscription header contains correct values in correct format"""
+        secrets_bytes = json.dumps(self.secrets).encode()
+        package = gen_subscription(secrets_bytes, self.device_id, self.start, self.end, self.channel)
+        
+        # Extract header values (36 bytes: 4 + 8 + 8 + 4 + 12)
+        # Format is: device_id (uint32), start (uint64), end (uint64), channel (uint32), nonce (12 bytes)
+        header = package[:36]
+        parsed_device_id, parsed_start, parsed_end, parsed_channel = struct.unpack("<IQQI", header[:24])
+        
+        # Verify header values match input
+        self.assertEqual(parsed_device_id, self.device_id)
+        self.assertEqual(parsed_start, self.start)
+        self.assertEqual(parsed_end, self.end)
+        self.assertEqual(parsed_channel, self.channel)
+        
+        # Verify nonce is 12 bytes
+        nonce = header[24:36]
+        self.assertEqual(len(nonce), 12)
+
+    def test_subscription_signature(self):
+        """Test that subscription signature is valid and verifies correctly"""
+        secrets_bytes = json.dumps(self.secrets).encode()
+        package = gen_subscription(secrets_bytes, self.device_id, self.start, self.end, self.channel)
+        
+        # Split package into content and signature
+        content = package[:-64]  # Everything except last 64 bytes
+        signature = package[-64:]  # Last 64 bytes
+        
+        # Create verifier using host's public key
+        public_key = self.host_key.public_key()
+        verifier = eddsa.new(public_key, 'rfc8032')
+        
+        # Verify signature is valid
+        verifier.verify(content, signature)
+        
+        # Test that verification fails with modified content
+        modified_content = bytearray(content)
+        modified_content[0] ^= 1  # Flip one bit in the content
+        
+        with self.assertRaises(ValueError):
+            verifier.verify(modified_content, signature)
+        
+        # Test that verification fails with modified signature
+        modified_signature = bytearray(signature)
+        modified_signature[0] ^= 1  # Flip one bit in the signature
+        
+        with self.assertRaises(ValueError):
+            verifier.verify(content, modified_signature)
 
 
 if __name__ == '__main__':

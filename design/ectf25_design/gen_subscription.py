@@ -14,9 +14,15 @@ import argparse
 import json
 from pathlib import Path
 import struct
-from ectf25_design import Secrets
+from ectf25_design import Secrets, ChannelKeyDerivation, get_decoder_key
+from Crypto.Cipher import ChaCha20
+from Crypto.Random import get_random_bytes
+from Crypto.Signature import eddsa
+from Crypto.PublicKey import ECC
 
 from loguru import logger
+
+NODE_PASSWORD_SIZE = 25
 
 def gen_subscription(
     secrets: bytes, device_id: int, start: int, end: int, channel: int
@@ -33,10 +39,49 @@ def gen_subscription(
     """
     # Load the json of the secrets file
     secrets: Secrets = json.loads(secrets)
+    # Process secrets
+    for k, val in secrets["channels"].items():
+        secrets["channels"][k] = bytes.fromhex(val)
+    secrets["decoder_dk"] = bytes.fromhex(secrets["decoder_dk"])
 
+    assert(str(channel) in secrets["channels"].keys())
+    channel_root = secrets["channels"][str(channel)]
 
-    # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe
-    return struct.pack("<IQQI", device_id, start, end, channel)
+    header_bytes = struct.pack("<IQQI", device_id, start, end, channel)
+
+    deriv = ChannelKeyDerivation(root=channel_root, height=64)
+    keys = deriv.get_channel_keys(start, end)
+
+    passwords_bytes = b""
+    for ch_key in keys:
+        # Set ext to be 1 or 2 for last branch, so 0 can be used as uninitialized state 
+        ext = (ch_key.node_num % 2) + 1
+        trunc = ch_key.node_num // 2
+        key = ch_key.key
+
+        node_pass = struct.pack("<Qb16s", trunc, ext, key)
+        passwords_bytes += node_pass
+    
+    # Pad password bytes to size of 128 node passwords
+    passwords_bytes += b"\x00" * (128*NODE_PASSWORD_SIZE - len(passwords_bytes))
+
+    decoder_key = get_decoder_key(secrets["decoder_dk"], device_id)
+    nonce = get_random_bytes(12)
+    cipher = ChaCha20.new(key=decoder_key, nonce=nonce)
+    passwords_enc_bytes = cipher.encrypt(passwords_bytes)
+
+    header_bytes += nonce
+
+    # Load the host key and create signer
+    host_key = ECC.import_key(secrets["host_key"])
+    signer = eddsa.new(host_key, 'rfc8032')
+
+    sign_contents = header_bytes + passwords_enc_bytes
+    signature = signer.sign(sign_contents)
+
+    package = header_bytes + passwords_enc_bytes + signature
+
+    return package
 
 
 def parse_args():
