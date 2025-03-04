@@ -104,6 +104,7 @@ class TestGenSecrets(unittest.TestCase):
     
 class TestGenSubscription(unittest.TestCase):
     def test_get_node_cover(self):
+        """Test that function to get a cover for a node is correct"""
         h = 64
         deriv = ChannelKeyDerivation(root=b"1234", height=h)
 
@@ -123,6 +124,7 @@ class TestGenSubscription(unittest.TestCase):
         self.assertEqual(deriv.get_channel_node_cover(6), (span*2, end - span))
     
     def test_get_covering_nodes(self):
+        """Test that cover of node numbers created by get_covering_nodes is correct"""
         random.seed(0xdeadbeef)
 
         h = 64
@@ -153,10 +155,11 @@ class TestGenSubscription(unittest.TestCase):
             password_counts.append(len(cover))
             self.assertEqual(deriv.get_channel_nodes_cover(cover), (start, end))
         
-        print("Number of passwords needed to cover 1000 random frame ranges:")
-        print(password_counts)
+        # print("Number of passwords needed to cover 1000 random frame ranges:")
+        # print(password_counts)
 
     def test_generate_keys_from_node_cover(self):
+        """Test that the keys created for a subscription have the correct cover and secrets"""
         random.seed(0xdeafbeef)
 
         h = 64
@@ -178,11 +181,66 @@ class TestGenSubscription(unittest.TestCase):
                     curr_key = deriv.get_right_subkey(curr_key)
                     node_num = node_num * 2 + 1
 
+            channel_key = deriv.get_key_for_node(node_num)
+            self.assertEqual(channel_key, ChannelTreeNode(node_num, curr_key))
+
         # print(f"Test traversal for {node_num}:")
         # print(traversal)
 
-        channel_key = deriv.generate_keys_from_node_cover([node_num])[0]
-        self.assertEqual(channel_key, ChannelTreeNode(node_num, curr_key))
+    def test_get_frame_key_from_cover(self):
+        """Test that get_frame_key_from_cover is able to derive keys for frames within its range
+        """
+
+        # Here we generate a random subscription range, and get the set of keys for it
+        # Then we make sure it doesn't throw an error, and the key is the same as deriving it manually
+        random.seed(0xdeadbeef)
+        
+        h = 4
+        deriv = ChannelKeyDerivation(root=b"1234", height=h)
+        
+        # Test several random ranges
+        for _ in range(100):
+            # Generate random start and end frames
+            start = random.randint(0, 2**h - 1)
+            end = start + random.randint(0, 2**h - 1 - start)
+            
+            # Get the keys for this range
+            keys = deriv.get_channel_keys(start, end)
+            
+            # Test random frames within the range
+            for _ in range(5):
+                frame = random.randint(start, end)
+                
+                # Get key using both methods
+                direct_key = deriv.get_frame_key(frame).key
+                cover_key = deriv.get_frame_key_from_cover(keys, frame)
+                
+                # Keys should match
+                self.assertEqual(direct_key, cover_key)
+            
+            # Test that frames outside range raise an exception
+            # Test that frames outside range raise an exception
+            with self.assertRaises(Exception):
+                deriv.get_frame_key_from_cover(keys, start - 1)
+            
+            with self.assertRaises(Exception):
+                deriv.get_frame_key_from_cover(keys, end + 1)
+                
+            # Test 100 random frames outside the range
+            for _ in range(100):
+                # Randomly choose between before start or after end
+                if random.randint(0,1) == 0:
+                    # Test frame before start
+                    if start > 0:
+                        frame = random.randint(0, start-1)
+                        with self.assertRaises(Exception):
+                            deriv.get_frame_key_from_cover(keys, frame)
+                else:
+                    # Test frame after end 
+                    if end < 2**h - 1:
+                        frame = random.randint(end+1, 2**h - 1)
+                        with self.assertRaises(Exception):
+                            deriv.get_frame_key_from_cover(keys, frame)
 
 
 if __name__ == '__main__':

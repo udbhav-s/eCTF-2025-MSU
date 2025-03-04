@@ -106,38 +106,92 @@ class ChannelKeyDerivation:
     def get_right_subkey(self, key: bytes):
         return MD5.new(key + b"R").digest()
     
-    def generate_keys_from_node_cover(self, node_numbers: List[int]) -> List[ChannelTreeNode]:
-        nodes = []
+    def get_key_for_node(self, node_num: int) -> ChannelTreeNode:
+        """Generate the key for a given node in the tree from the root key
+        """
+        traversal = []
+        n = node_num
+        # Traverse to root
+        while n > 1:
+            traversal.append(n % 2)
+            n = n // 2
 
-        for node_num in node_numbers:
-            traversal = []
-            n = node_num
-            # Traverse to root
-            while n > 1:
-                traversal.append(n % 2)
-                n = n // 2
-
-            # print(f"Traversal for {node_num}")
-            # print(traversal[::-1])
-
-            # Traverse from root, generating subkeys along the way 
-            curr_key = self.root    
-            for t in traversal[::-1]:
-                if t == 0:
-                    curr_key = self.get_left_subkey(curr_key)
-                else:
-                    curr_key = self.get_right_subkey(curr_key)
+        # Traverse from root, generating subkeys along the way 
+        curr_key = self.root    
+        for t in traversal[::-1]:
+            if t == 0:
+                curr_key = self.get_left_subkey(curr_key)
+            else:
+                curr_key = self.get_right_subkey(curr_key)
                 
-            nodes.append(ChannelTreeNode(node_num=node_num, key=curr_key))
-        
-        return nodes
+        return ChannelTreeNode(node_num=node_num, key=curr_key)        
 
     def get_channel_keys(self, start: int, end: int) -> List[ChannelTreeNode]:
         """Takes a timestamp range, and generates a list of tree nodes with keys that cover that range
         """
 
         node_numbers = self.get_covering_nodes(start, end)
-        return self.generate_keys_from_node_cover(node_numbers)
+        nodes = []
+
+        for node_num in node_numbers:
+            nodes.append(self.get_key_for_node(node_num))
+        
+        return nodes
+    
+    def get_frame_key(self, frame_num: int) -> bytes:
+        """Returns the key to be used for encrypting a given frame, based on the hash tree derivation
+        """
+        node_num = frame_num + 2**self.height
+        return self.get_key_for_node(node_num)
+
+    def get_frame_key_from_cover(self, nodes: List[ChannelTreeNode], frame_num: int):
+        """Given a cover of the tree and a frame to decode, verify that the frame can be decoded
+        (Similar to what the Decoder will do)
+        """
+        node_num = frame_num + 2**self.height
+
+        traversal = []
+        n = node_num
+        # Traverse to root
+        while n > 1:
+            traversal.append(n % 2)
+            n = n // 2
+        
+        # Reverse to get traversal from root to leaf
+        traversal = traversal[::-1]
+
+        curr_node = 1
+        node_one = [k for k in nodes if k.node_num is curr_node]
+        closest_node = node_one[0] if len(node_one) else None
+        closest_node_idx = 0 if closest_node == 1 else None
+
+        for i, branch in enumerate(traversal):
+            if branch == 0:
+                curr_node = curr_node * 2
+            else:
+                curr_node = curr_node * 2 + 1
+
+            found_nodes = [k for k in nodes if k.node_num is curr_node]
+            if any(found_nodes):
+                closest_node = found_nodes[0]
+                closest_node_idx = i
+
+        # If we are unable to derive a key using a node from the list
+        if closest_node is None:
+            raise Exception("Could not derive a key from the given nodes")
+        
+        # Derive the key from the closest node found in subscription package
+        curr_node = closest_node.node_num
+        curr_key = closest_node.key
+        for branch in traversal[(closest_node_idx + 1):]:
+            if branch == 0:
+                curr_node = curr_node * 2
+                curr_key = self.get_left_subkey(curr_key)
+            else:
+                curr_node = curr_node * 2 + 1
+                curr_key = self.get_right_subkey(curr_key)
+
+        return curr_key
 
 
 
