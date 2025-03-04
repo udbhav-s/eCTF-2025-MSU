@@ -6,11 +6,14 @@ pub mod modules;
 pub extern crate max7800x_hal as hal;
 
 use bytemuck;
+use ed25519_dalek::pkcs8::DecodePrivateKey;
 pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
 use md5::{Digest, Md5};
+use ed25519_dalek::{Signature, Verifier, SigningKey};
+// use ed25519_dalek::{Signature, Verifier, SigningKey, pkcs8::DecodePrivateKey};
 use modules::channel_manager::{save_subscription, SubscriptionError};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
@@ -18,6 +21,8 @@ use modules::hostcom_manager::{
     MessageHeader, MsgType, MSG_MAGIC,
 };
 use panic_halt as _; // Import panic handler
+
+use embedded_io::Write;
 
 #[entry]
 fn main() -> ! {
@@ -65,9 +70,43 @@ fn main() -> ! {
                 let _ = write_list(&mut console, &mut flash_manager);
             }
             x if x == MsgType::Subscribe as u8 => {
+                let key_der = b"\\x30\\x2e\\x02\\x01\\x00\\x30\\x05\\x06\\x03\\x2b\\x65\\x70\\x04\\x22\\x04\\x20\\xdf\\x05\\x18\\x15\\x4c\\xcc\\xae\\x9a\\xb4\\xf4\\x8b\\x5c\\xb4\\xc0\\xfb\\x59\\x87\\xec\\x5b\\x94\\x98\\x3a\\x9a\\x6c\\x12\\xd4\\x8b\\xc5\\xb1\\x19\\xcb\\x5b";
+                let signing_key = SigningKey::from_pkcs8_der(key_der).expect("Invalid key DER!");
+                let verifying_key = signing_key.verifying_key();
+
                 let _ = write_ack(&mut console);
                 let body = read_body(&mut console, hdr.length);
-                let result = save_subscription(&mut flash_manager, body);
+
+                let msg_len = hdr.length as usize - 64;
+                let message = &body.data[..msg_len];
+                let signature = &body.data[msg_len..hdr.length as usize];
+                
+                let sig = Signature::from_slice(signature)
+                    .expect("Failed to parse signature");
+                
+                let result = verifying_key.verify(message, &sig);
+                
+                if result.is_err() {
+                    write_debug(&mut console, "Signature verification failed\n");
+                    let _ = write_error(&mut console);
+                    continue;
+                } else {
+                    write_debug(&mut console, "Signature verification succeeded!\n");
+                }
+
+                let decoder_id = u32::from_le_bytes(message[0..4].try_into().unwrap());
+                let start_ts = u64::from_le_bytes(message[4..12].try_into().unwrap());
+                let end_ts = u64::from_le_bytes(message[12..20].try_into().unwrap());
+                let channel_id = u32::from_le_bytes(message[20..24].try_into().unwrap());
+                // Note: bytes 24..36 contain the encryption nonce
+
+                // Debug prints for header fields
+                write!(console, "Decoder ID: {}\r\n", decoder_id).unwrap();
+                write!(console, "Start timestamp: {}\r\n", start_ts).unwrap();
+                write!(console, "End timestamp: {}\r\n", end_ts).unwrap();
+                write!(console, "Channel ID: {}\r\n", channel_id).unwrap();
+
+                // let result = save_subscription(&mut flash_manager, body);
 
                 // Prepare a subscribe response header.
                 let resp_hdr = MessageHeader {
@@ -76,15 +115,15 @@ fn main() -> ! {
                     length: 0,
                 };
 
-                if let Err(SubscriptionError::InvalidChannelId) = result {
-                    let _ = write_error(&mut console);
-                } else {
+                // if let Err(SubscriptionError::InvalidChannelId) = result {
+                //     let _ = write_error(&mut console);
+                // } else {
                     // Write the response header byte-by-byte.
                     for &b in bytemuck::bytes_of(&resp_hdr) {
                         console.write_byte(b);
                     }
                     let _ = read_ack(&mut console);
-                }
+                // }
             }
             x if x == MsgType::Decode as u8 => {
                 let _ = write_ack(&mut console);

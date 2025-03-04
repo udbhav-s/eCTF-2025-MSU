@@ -28,7 +28,7 @@ pub struct MessageHeader {
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct MessageBody {
-    pub data: [u8; 1024],
+    pub data: [u8; 4096],
     pub length: u16,
 }
 
