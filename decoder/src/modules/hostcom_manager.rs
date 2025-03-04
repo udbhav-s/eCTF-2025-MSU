@@ -174,3 +174,7 @@ pub fn write_list<U: Write + Read>(
 
     Ok(())
 }
+
+pub fn write_error<U: Write>(console: &mut U) -> Result<(), ()> {
+    console.write_all(b"%E\x00\x00").map_err(|_| ())
+}

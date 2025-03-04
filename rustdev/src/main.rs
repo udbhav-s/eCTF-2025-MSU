@@ -10,11 +10,11 @@ pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
-use modules::channel_manager::{save_subscription, SubscriptionError};
+use modules::channel_manager::save_subscription;
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
-    read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
-    MessageHeader, MsgType, MSG_MAGIC,
+    read_ack, read_body, read_header, write_ack, write_debug, write_list, MessageHeader, MsgType,
+    MSG_MAGIC,
 };
 use panic_halt as _; // Import module from lib.rs
 
@@ -60,26 +60,19 @@ fn main() -> ! {
                     write_ack(&mut console).unwrap();
                     match read_body(&mut console, hdr.length) {
                         Ok(body) => {
-                            let result = save_subscription(&mut flash_manager, body);
-
                             let hdr = MessageHeader {
                                 magic: MSG_MAGIC,
                                 opcode: MsgType::Subscribe as u8,
                                 length: 0,
                             };
+                            let _ = save_subscription(&mut flash_manager, body);
 
-                            // Handle specific errors
-                            if let Err(SubscriptionError::InvalidChannelId) = result {
-                                write_error(&mut console).unwrap();
-                            } else {
-                                // Continue with normal flow
-                                if console.write_all(bytemuck::bytes_of(&hdr)).is_err() {
-                                    continue;
-                                }
+                            if console.write_all(bytemuck::bytes_of(&hdr)).is_err() {
+                                continue;
+                            }
 
-                                if read_ack(&mut console).is_ok() {
-                                    console.write_all(&[]).ok();
-                                }
+                            if read_ack(&mut console).is_ok() {
+                                console.write_all(&[]).ok();
                             }
                         }
                         Err(_) => (),
