@@ -5,7 +5,7 @@ pub mod modules;
 
 pub extern crate max7800x_hal as hal;
 
-use embedded_io::Write;
+use bytemuck;
 pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
@@ -16,24 +16,26 @@ use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
     MessageHeader, MsgType, MSG_MAGIC,
 };
-use panic_halt as _; // Import module from lib.rs
+use panic_halt as _; // Import panic handler
 
 #[entry]
 fn main() -> ! {
-    // Take ownership of the MAX78000 peripherals
+    // Take ownership of the MAX78000 peripherals.
     let p = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
-    // Initialize system peripherals and clocks
+    // let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
+
+    // Initialize system peripherals and clocks.
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
-    // Initialize a delay timer using the ARM SYST (SysTick) peripheral
-    let rate = clks.sys_clk.frequency;
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
 
-    // Initialize and split the GPIO0 peripheral into pins
+    // Initialize a delay timer using the ARM SYST (SysTick) peripheral.
+    // let rate = clks.sys_clk.frequency;
+    // let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
+
+    // Initialize and split the GPIO0 peripheral into pins.
     let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
-    // Configure UART to host computer with 115200 8N1 settings
+    // Configure UART to host computer with 115200 8N1 settings.
     let rx_pin = gpio0_pins.p0_0.into_af1();
     let tx_pin = gpio0_pins.p0_1.into_af1();
     let mut console = hal::uart::UartPeripheral::uart0(p.uart0, &mut gcr.reg, rx_pin, tx_pin)
@@ -42,74 +44,70 @@ fn main() -> ! {
         .parity(hal::uart::ParityBit::None)
         .build();
 
-    // Initialize the flash controller
+    // Initialize the flash controller.
     let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
-    write!(console, "Flash controller initialized!\r\n").unwrap();
-    delay.delay_ms(1000);
+    // Use the HAL's blocking write_byte for text output.
+    for &b in b"Flash controller initialized!\r\n" {
+        console.write_byte(b);
+    }
+    // delay.delay_ms(1000);
 
     let mut flash_manager = FlashManager::new(flc);
 
     loop {
-        match read_header(&mut console) {
-            Ok(hdr) => {
-                if hdr.opcode == MsgType::List as u8 {
-                    write_ack(&mut console).unwrap();
-                    write_debug(&mut console, "List section in rust\n").unwrap();
-                    write_list(&mut console, &mut flash_manager).unwrap();
-                } else if hdr.opcode == MsgType::Subscribe as u8 {
-                    write_ack(&mut console).unwrap();
-                    match read_body(&mut console, hdr.length) {
-                        Ok(body) => {
-                            let result = save_subscription(&mut flash_manager, body);
+        // Read the header using our new low-overhead function.
+        let hdr = read_header(&mut console);
+        match hdr.opcode {
+            x if x == MsgType::List as u8 => {
+                let _ = write_ack(&mut console);
+                write_debug(&mut console, "List section in rust\n");
+                let _ = write_list(&mut console, &mut flash_manager);
+            }
+            x if x == MsgType::Subscribe as u8 => {
+                let _ = write_ack(&mut console);
+                let body = read_body(&mut console, hdr.length);
+                let result = save_subscription(&mut flash_manager, body);
 
-                            let hdr = MessageHeader {
-                                magic: MSG_MAGIC,
-                                opcode: MsgType::Subscribe as u8,
-                                length: 0,
-                            };
+                // Prepare a subscribe response header.
+                let resp_hdr = MessageHeader {
+                    magic: MSG_MAGIC,
+                    opcode: MsgType::Subscribe as u8,
+                    length: 0,
+                };
 
-                            // Handle specific errors
-                            if let Err(SubscriptionError::InvalidChannelId) = result {
-                                write_error(&mut console).unwrap();
-                            } else {
-                                // Continue with normal flow
-                                if console.write_all(bytemuck::bytes_of(&hdr)).is_err() {
-                                    continue;
-                                }
-
-                                if read_ack(&mut console).is_ok() {
-                                    console.write_all(&[]).ok();
-                                }
-                            }
-                        }
-                        Err(_) => (),
-                    };
-                } else if hdr.opcode == MsgType::Decode as u8 {
-                    write_ack(&mut console).unwrap();
-                    match read_body(&mut console, hdr.length) {
-                        Ok(body) => {
-                            let hdr = MessageHeader {
-                                magic: MSG_MAGIC,
-                                opcode: MsgType::Decode as u8,
-                                length: hdr.length - 12,
-                            };
-
-                            if console.write_all(bytemuck::bytes_of(&hdr)).is_err() {
-                                continue;
-                            }
-
-                            if read_ack(&mut console).is_ok() {
-                                console.write_all(&body.data[12..]).ok();
-                            }
-                        }
-                        Err(_) => (),
-                    };
+                if let Err(SubscriptionError::InvalidChannelId) = result {
+                    let _ = write_error(&mut console);
                 } else {
-                    let _ = console.write_all(b"We only support the List command right now!\n");
+                    // Write the response header byte-by-byte.
+                    for &b in bytemuck::bytes_of(&resp_hdr) {
+                        console.write_byte(b);
+                    }
+                    let _ = read_ack(&mut console);
                 }
             }
-            Err(_) => {
-                let _ = console.write_all(b"There was an error!\n");
+            x if x == MsgType::Decode as u8 => {
+                let _ = write_ack(&mut console);
+                let body = read_body(&mut console, hdr.length);
+                // Prepare a decode response header.
+                let resp_hdr = MessageHeader {
+                    magic: MSG_MAGIC,
+                    opcode: MsgType::Decode as u8,
+                    length: hdr.length - 12,
+                };
+                for &b in bytemuck::bytes_of(&resp_hdr) {
+                    console.write_byte(b);
+                }
+                let _ = read_ack(&mut console);
+                // Write the decoded frame (skip the first 12 bytes).
+                for &b in &body.data[12..(hdr.length as usize)] {
+                    console.write_byte(b);
+                }
+            }
+            _ => {
+                // Unsupported command: send a simple error message.
+                for &b in b"We only support the List command right now!\n" {
+                    console.write_byte(b);
+                }
             }
         }
     }

@@ -1,15 +1,11 @@
-// Re-export the HAL and panic handler as needed.
+// Re-export the HAL as needed.
 pub extern crate max7800x_hal as hal;
 use crate::modules::channel_manager::read_channel;
 use crate::modules::flash_manager::FlashManager;
 use bytemuck::{Pod, Zeroable};
-// embedded_io API allows usage of core macros like `write!`
-use embedded_io::{Read, Write};
 
-/// The magic byte used in all protocol messages.
 pub const MSG_MAGIC: u8 = b'%';
 
-/// Ref: https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MsgType {
@@ -21,7 +17,6 @@ pub enum MsgType {
     Error = b'E',
 }
 
-/// Message header for protocol packets.
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct MessageHeader {
@@ -30,7 +25,6 @@ pub struct MessageHeader {
     pub length: u16,
 }
 
-/// Message body for protocol packets.
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct MessageBody {
@@ -38,7 +32,6 @@ pub struct MessageBody {
     pub length: u16,
 }
 
-/// Channel information used in list messages.
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct ChannelInfo {
@@ -47,134 +40,167 @@ pub struct ChannelInfo {
     pub end_timestamp: u64,
 }
 
-pub fn read_ack<U: Read>(console: &mut U) -> Result<(), ()> {
-    let mut buf = [0u8; 4];
-    console.read_exact(&mut buf).map_err(|_| ())?;
+/// A minimal trait that exposes the HAL’s blocking read_byte and write_byte methods.
+/// (This is provided to decouple our functions from a specific UART type.)
+pub trait UartHalOps {
+    fn read_byte(&mut self) -> u8;
+    fn write_byte(&mut self, byte: u8);
+}
 
-    if buf[0] != MSG_MAGIC || buf[1] != MsgType::Ack as u8 {
-        return Err(());
+// Implement UartHalOps for the HAL’s BuiltUartPeripheral.
+impl<UART, RX, TX, CTS, RTS> UartHalOps for hal::uart::BuiltUartPeripheral<UART, RX, TX, CTS, RTS>
+where
+    UART: core::ops::Deref<Target = crate::pac::uart0::RegisterBlock>,
+{
+    #[inline(always)]
+    fn read_byte(&mut self) -> u8 {
+        Self::read_byte(self)
     }
-
-    // TODO: Add a check for maximum packet length allowed in header based on our protocol
-
-    Ok(())
-}
-
-pub fn write_ack<U: Write>(console: &mut U) -> Result<(), ()> {
-    console.write_all(b"%A\x00\x00").map_err(|_| ())
-}
-
-pub fn read_header<U: Read>(console: &mut U) -> Result<MessageHeader, ()> {
-    let mut hdr = MessageHeader::zeroed();
-
-    while console
-        .read_exact(core::slice::from_mut(&mut hdr.magic))
-        .is_ok()
-    {
-        if hdr.magic == MSG_MAGIC {
-            break;
-        }
+    #[inline(always)]
+    fn write_byte(&mut self, byte: u8) {
+        Self::write_byte(self, byte)
     }
-
-    console
-        .read_exact(core::slice::from_mut(&mut hdr.opcode))
-        .map_err(|_| ())?;
-
-    let mut length_bytes = [0u8; 2];
-    console.read_exact(&mut length_bytes).map_err(|_| ())?;
-    hdr.length = u16::from_le_bytes(length_bytes);
-
-    Ok(hdr)
 }
 
-pub fn read_body<U: Read + Write>(console: &mut U, length: u16) -> Result<MessageBody, ()> {
+/// Reads an ACK packet. Returns 0 on success, -1 on error.
+#[inline(always)]
+pub fn read_ack<U: UartHalOps>(console: &mut U) -> i32 {
+    // Read header bytes: wait until we see the magic byte.
+    let mut byte = console.read_byte();
+    while byte != MSG_MAGIC {
+        byte = console.read_byte();
+    }
+    let cmd = console.read_byte();
+    if cmd != MsgType::Ack as u8 {
+        return -1;
+    }
+    // Skip the 2-byte length.
+    let _ = console.read_byte();
+    let _ = console.read_byte();
+    0
+}
+
+/// Writes an ACK packet.
+#[inline(always)]
+pub fn write_ack<U: UartHalOps>(console: &mut U) -> i32 {
+    let ack = [MSG_MAGIC, MsgType::Ack as u8, 0, 0];
+    for &b in &ack {
+        console.write_byte(b);
+    }
+    0
+}
+
+/// Reads a message header from UART.
+#[inline(always)]
+pub fn read_header<U: UartHalOps>(console: &mut U) -> MessageHeader {
+    let mut byte = console.read_byte();
+    while byte != MSG_MAGIC {
+        byte = console.read_byte();
+    }
+    let opcode = console.read_byte();
+    let b0 = console.read_byte();
+    let b1 = console.read_byte();
+    MessageHeader {
+        magic: MSG_MAGIC,
+        opcode,
+        length: u16::from_le_bytes([b0, b1]),
+    }
+}
+
+/// Reads the message body in 256-byte chunks.
+/// Acknowledges each chunk. Returns the filled MessageBody.
+#[inline(always)]
+pub fn read_body<U: UartHalOps>(console: &mut U, length: u16) -> MessageBody {
     let mut body = MessageBody::zeroed();
-    let mut offset = 0usize;
-    let total_length = length as usize;
+    let total = length as usize;
+    let mut offset = 0;
     let mut chunk = [0u8; 256];
-
-    while offset < total_length {
-        let bytes_to_read = core::cmp::min(256, total_length - offset);
-        // Read the next chunk (exactly bytes_to_read bytes)
-        console
-            .read_exact(&mut chunk[..bytes_to_read])
-            .map_err(|_| ())?;
-        // Copy the chunk into our message body buffer at the correct offset.
-        body.data[offset..offset + bytes_to_read].copy_from_slice(&chunk[..bytes_to_read]);
-        offset += bytes_to_read;
-        // Acknowledge receipt of this chunk.
-        write_ack(console).map_err(|_| ())?;
+    while offset < total {
+        let chunk_size = core::cmp::min(256, total - offset);
+        for i in 0..chunk_size {
+            chunk[i] = console.read_byte();
+        }
+        body.data[offset..offset + chunk_size].copy_from_slice(&chunk[..chunk_size]);
+        offset += chunk_size;
+        let _ = write_ack(console);
     }
-
-    // Record the length of the received body.
     body.length = length;
-    Ok(body)
+    body
 }
 
-pub fn write_debug<U: Write + Read>(console: &mut U, msg: &str) -> Result<(), ()> {
+/// Writes a debug message. (Debug messages do not require ACKs.)
+#[inline(always)]
+pub fn write_debug<U: UartHalOps>(console: &mut U, msg: &str) {
     let bytes = msg.as_bytes();
-
-    // Send debug message header
-    let hdr = MessageHeader {
+    let header = MessageHeader {
         magic: MSG_MAGIC,
         opcode: MsgType::Debug as u8,
         length: bytes.len() as u16,
     };
-    console
-        .write_all(bytemuck::bytes_of(&hdr))
-        .map_err(|_| ())?;
-
-    // Debug messages are not sent an ACK, so we don't send them in chunks
-    // Send entire message at once
-    console.write_all(bytes).map_err(|_| ())?;
-
-    Ok(())
+    let hdr_bytes = bytemuck::bytes_of(&header);
+    for &b in hdr_bytes {
+        console.write_byte(b);
+    }
+    for &b in bytes {
+        console.write_byte(b);
+    }
 }
 
-pub fn write_channel<U: Write>(console: &mut U, channel: &ChannelInfo) -> Result<(), ()> {
-    console
-        .write_all(bytemuck::bytes_of(channel))
-        .map_err(|_| ())
+/// Writes a ChannelInfo structure.
+#[inline(always)]
+pub fn write_channel<U: UartHalOps>(console: &mut U, channel: &ChannelInfo) -> i32 {
+    let bytes = bytemuck::bytes_of(channel);
+    for &b in bytes {
+        console.write_byte(b);
+    }
+    0
 }
 
-pub fn write_list<U: Write + Read>(
-    console: &mut U,
-    flash_manager: &mut FlashManager,
-) -> Result<(), ()> {
-    let mut count = 0;
+/// Writes a "list" message with channel information.
+/// Mimics the C version by writing the header, waiting for an ACK,
+/// sending a count and then each ChannelInfo.
+#[inline(always)]
+pub fn write_list<U: UartHalOps>(console: &mut U, flash_manager: &mut FlashManager) -> i32 {
+    let mut count: u32 = 0;
     for i in 0..8 {
         let addr = 0x1006_0000 + (i as u32 * 0x2000);
-        let magic = flash_manager.read_magic(addr).unwrap();
-        if magic == 0xABCD {
+        if flash_manager.read_magic(addr).unwrap_or(0) == 0xABCD {
             count += 1;
         }
     }
-
-    let channel_info_size = core::mem::size_of::<ChannelInfo>();
-    let length = (size_of::<u32>() + count * channel_info_size) as u16;
-
-    let hdr = MessageHeader {
+    let header = MessageHeader {
         magic: MSG_MAGIC,
         opcode: MsgType::List as u8,
-        length,
+        length: (core::mem::size_of::<u32>() + count as usize * core::mem::size_of::<ChannelInfo>())
+            as u16,
     };
-
-    console
-        .write_all(bytemuck::bytes_of(&hdr))
-        .map_err(|_| ())?;
-
-    if read_ack(console).is_ok() {
-        console.write_all(&count.to_le_bytes()).ok();
-        for i in 0..count {
-            let addr = 0x1006_0000 + (i as u32 * 0x2000);
-            let ch = read_channel(flash_manager, addr).unwrap();
-            write_channel(console, &ch).map_err(|_| ())?;
+    let hdr_bytes = bytemuck::bytes_of(&header);
+    for &b in hdr_bytes {
+        console.write_byte(b);
+    }
+    if read_ack(console) != 0 {
+        return -1;
+    }
+    // Write the channel count (u32 little-endian)
+    for &b in &count.to_le_bytes() {
+        console.write_byte(b);
+    }
+    for i in 0..count {
+        let addr = 0x1006_0000 + (i as u32 * 0x2000);
+        let ch = read_channel(flash_manager, addr).unwrap();
+        if write_channel(console, &ch) != 0 {
+            return -1;
         }
     }
-
-    Ok(())
+    0
 }
 
-pub fn write_error<U: Write>(console: &mut U) -> Result<(), ()> {
-    console.write_all(b"%E\x00\x00").map_err(|_| ())
+/// Writes an error message.
+#[inline(always)]
+pub fn write_error<U: UartHalOps>(console: &mut U) -> i32 {
+    let err = [MSG_MAGIC, MsgType::Error as u8, 0, 0];
+    for &b in &err {
+        console.write_byte(b);
+    }
+    0
 }
