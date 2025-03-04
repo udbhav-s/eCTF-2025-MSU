@@ -10,6 +10,7 @@ pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
+use md5::{Digest, Md5};
 use modules::channel_manager::{save_subscription, SubscriptionError};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
@@ -88,6 +89,15 @@ fn main() -> ! {
             x if x == MsgType::Decode as u8 => {
                 let _ = write_ack(&mut console);
                 let body = read_body(&mut console, hdr.length);
+
+                // hashes
+                let h = b"hello world";
+                for _i in 0..64 {
+                    let mut hasher = Md5::new();
+                    hasher.update(h);
+                    let _hash = hasher.finalize();
+                }
+
                 // Prepare a decode response header.
                 let resp_hdr = MessageHeader {
                     magic: MSG_MAGIC,
