@@ -42,7 +42,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tlink.x");
 
     // Use the absolute path for global.secrets since it's mounted at /global.secrets.
-    let secret_path = Path::new("/global.secrets");
+    let secret_path = Path::new("../global.secrets");
     println!("cargo:rerun-if-changed=/global.secrets");
 
     // Read the secrets file.
