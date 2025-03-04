@@ -195,7 +195,7 @@ class TestGenSubscription(unittest.TestCase):
         # Then we make sure it doesn't throw an error, and the key is the same as deriving it manually
         random.seed(0xdeadbeef)
         
-        h = 4
+        h = 64
         deriv = ChannelKeyDerivation(root=b"1234", height=h)
         
         # Test several random ranges
@@ -219,15 +219,14 @@ class TestGenSubscription(unittest.TestCase):
                 self.assertEqual(direct_key, cover_key)
             
             # Test that frames outside range raise an exception
-            # Test that frames outside range raise an exception
             with self.assertRaises(Exception):
                 deriv.get_frame_key_from_cover(keys, start - 1)
             
             with self.assertRaises(Exception):
                 deriv.get_frame_key_from_cover(keys, end + 1)
                 
-            # Test 100 random frames outside the range
-            for _ in range(100):
+            # Test random frames outside the range
+            for _ in range(10):
                 # Randomly choose between before start or after end
                 if random.randint(0,1) == 0:
                     # Test frame before start

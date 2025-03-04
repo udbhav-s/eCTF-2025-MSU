@@ -18,7 +18,7 @@ class ChannelTreeNode:
 @dataclass
 class ChannelKeyDerivation:
     root: bytes
-    height: int = 4
+    height: int = 64
 
     def get_channel_node_cover(self, node_num: int) -> Tuple[int, int]:
         """Given a node representing a derivation key for a channel's
@@ -35,7 +35,7 @@ class ChannelKeyDerivation:
         
         return tuple(node_cover)
 
-    def get_channel_nodes_cover(self, nodes: List[ChannelTreeNode]) -> Tuple[int, int]:
+    def get_channel_nodes_cover(self, nodes: List[int]) -> Tuple[int, int]:
         """Given a list of nodes, gives minimum and maximum timestamp they can decode
         """
         if not len(nodes):
@@ -163,18 +163,20 @@ class ChannelKeyDerivation:
         curr_node = 1
         node_one = [k for k in nodes if k.node_num is curr_node]
         closest_node = node_one[0] if len(node_one) else None
-        closest_node_idx = 0 if closest_node == 1 else None
+        closest_node_idx = 0 if closest_node is not None else None
 
         for i, branch in enumerate(traversal):
+            idx = i + 1
+
             if branch == 0:
                 curr_node = curr_node * 2
             else:
                 curr_node = curr_node * 2 + 1
 
-            found_nodes = [k for k in nodes if k.node_num is curr_node]
+            found_nodes = [k for k in nodes if k.node_num == curr_node]
             if any(found_nodes):
                 closest_node = found_nodes[0]
-                closest_node_idx = i
+                closest_node_idx = idx
 
         # If we are unable to derive a key using a node from the list
         if closest_node is None:
@@ -183,7 +185,7 @@ class ChannelKeyDerivation:
         # Derive the key from the closest node found in subscription package
         curr_node = closest_node.node_num
         curr_key = closest_node.key
-        for branch in traversal[(closest_node_idx + 1):]:
+        for branch in traversal[closest_node_idx:]:
             if branch == 0:
                 curr_node = curr_node * 2
                 curr_key = self.get_left_subkey(curr_key)
