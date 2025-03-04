@@ -1,6 +1,9 @@
 #![no_std]
 #![no_main]
 
+// Include the generated secrets.
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
+
 pub mod modules;
 
 pub extern crate max7800x_hal as hal;
@@ -54,6 +57,21 @@ fn main() -> ! {
     // delay.delay_ms(1000);
 
     let mut flash_manager = FlashManager::new(flc);
+
+    // Example usage
+
+    // for &b in b"Decoder DK:\r\n"
+    //     .iter()
+    //     .chain(DECODER_DK.as_bytes().iter())
+    // {
+    //     console.write_byte(b);
+    // }
+    // for &b in b"Host Key Public:\r\n"
+    //     .iter()
+    //     .chain(HOST_KEY_PUB.as_bytes().iter())
+    // {
+    //     console.write_byte(b);
+    // }
 
     loop {
         // Read the header using our new low-overhead function.
