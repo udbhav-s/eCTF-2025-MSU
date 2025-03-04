@@ -32,10 +32,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && rustup target add thumbv7em-none-eabihf \
     && cargo install cargo-generate
 
-# Install MSDK
-RUN wget https://github.com/analogdevicesinc/msdk/archive/refs/tags/v2024_02.zip \
-    && unzip v2024_02.zip \
-    && rm -f v2024_02.zip
+# # Install MSDK
+# RUN wget https://github.com/analogdevicesinc/msdk/archive/refs/tags/v2024_02.zip \
+#     && unzip v2024_02.zip \
+#     && rm -f v2024_02.zip
 
 ENV MAXIM_PATH=/root/msdk-2024_02
 
