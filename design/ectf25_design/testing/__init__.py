@@ -36,7 +36,7 @@ class TestGenSecrets(unittest.TestCase):
             
         # Test host_key can be imported as ECC key
         try:
-            ECC.import_key(bytes.fromhex(secrets["host_key"]))
+            ECC.import_key(bytes.fromhex(secrets["host_key_priv"]))
         except ValueError:
             self.fail("host_key is not a valid DER-encoded ECC key")
     
@@ -73,7 +73,7 @@ class TestGenSecrets(unittest.TestCase):
         secrets = get_secrets()
         
         # Parse the DER-encoded Ed25519 private key
-        private_key = ECC.import_key(bytes.fromhex(secrets["host_key"]))
+        private_key = ECC.import_key(bytes.fromhex(secrets["host_key_priv"]))
         
         # Create signer object
         signer = eddsa.new(private_key, 'rfc8032')
@@ -254,7 +254,7 @@ class TestGenSubscription(unittest.TestCase):
         self.start = 0
         self.end = 1000
         self.channel = int(random.choice(list(self.secrets["channels"].keys())))
-        self.host_key = ECC.import_key(bytes.fromhex(self.secrets["host_key"]))
+        self.host_key = ECC.import_key(bytes.fromhex(self.secrets["host_key_priv"]))
     
     def test_subscription_package_size(self):
         """Test that subscription package has correct size"""
