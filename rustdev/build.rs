@@ -63,10 +63,24 @@ fn main() {
         .and_then(|v| v.as_str())
         .expect("Missing or invalid host_key_pub");
 
+    // Get and parse the DECODER_ID from the environment.
+    let decoder_id_str =
+        env::var("DECODER_ID").expect("DECODER_ID environment variable must be set");
+
+    // Remove a potential "0x" prefix.
+    let decoder_id_str = decoder_id_str.trim_start_matches("0x");
+    let decoder_id_val: u32 =
+        u32::from_str_radix(decoder_id_str, 16).expect("Failed to parse DECODER_ID as hex");
+
+    // If you want an explicit little-endian byte array:
+    let decoder_id_le = decoder_id_val.to_le_bytes();
+
     // Generate the Rust code for the secrets.
     let generated_code = format!(
-        "pub const DECODER_DK: &'static [u8] = b{:?};\npub const HOST_KEY_PUB: &'static [u8] = b{:?};\n",
-        decoder_dk, host_key_pub
+        "pub const DECODER_DK: &'static [u8] = b{:?};\n\
+        pub const HOST_KEY_PUB: &'static [u8] = b{:?};\n\
+        pub const DECODER_ID: [u8; 4] = {:?};\n",
+        decoder_dk, host_key_pub, decoder_id_le
     );
 
     // Write the generated code to $OUT_DIR/secrets.rs.
