@@ -15,6 +15,10 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use hex::decode;
+use hkdf::Hkdf;
+use sha2::Sha512;
+
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
@@ -75,12 +79,20 @@ fn main() {
     // If you want an explicit little-endian byte array:
     let decoder_id_le = decoder_id_val.to_le_bytes();
 
+    // HKDF Derivation
+    // Use decoder_dk as the master key and the little-endian decoder id as the context/info.
+    let decoder_dk_bytes = decode(decoder_dk).expect("Invalid hex in decoder_dk");
+    let hk = Hkdf::<Sha512>::new(None, &decoder_dk_bytes);
+    let mut decoder_key = [0u8; 32];
+    hk.expand(&decoder_id_le, &mut decoder_key)
+        .expect("HKDF expansion failed");
+
     // Generate the Rust code for the secrets.
     let generated_code = format!(
-        "pub const DECODER_DK: &'static [u8] = b{:?};\n\
+        "pub const DECODER_KEY: [u8; 32] = {:?};\n\
         pub const HOST_KEY_PUB: &'static [u8] = b{:?};\n\
         pub const DECODER_ID: [u8; 4] = {:?};\n",
-        decoder_dk, host_key_pub, decoder_id_le
+        decoder_key, host_key_pub, decoder_id_le
     );
 
     // Write the generated code to $OUT_DIR/secrets.rs.
