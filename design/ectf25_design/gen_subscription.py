@@ -24,6 +24,7 @@ from loguru import logger
 
 NODE_PASSWORD_SIZE = 25
 
+
 def gen_subscription(
     secrets: bytes, device_id: int, start: int, end: int, channel: int
 ) -> bytes:
@@ -57,7 +58,7 @@ def gen_subscription(
         secrets["channels"][k] = bytes.fromhex(val)
     secrets["decoder_dk"] = bytes.fromhex(secrets["decoder_dk"])
 
-    assert(str(channel) in secrets["channels"].keys())
+    assert str(channel) in secrets["channels"].keys()
     channel_root = secrets["channels"][str(channel)]
 
     header_bytes = struct.pack("<IQQI", device_id, start, end, channel)
@@ -68,15 +69,15 @@ def gen_subscription(
     passwords_bytes = b""
     for ch_key in keys:
         trunc = ch_key.node_num // 2
-        # Set ext to be 1 or 2 for last branch, so 0 can be used as uninitialized state 
+        # Set ext to be 1 or 2 for last branch, so 0 can be used as uninitialized state
         ext = (ch_key.node_num % 2) + 1
         key = ch_key.key
 
         node_pass = struct.pack("<Qb16s", trunc, ext, key)
         passwords_bytes += node_pass
-    
+
     # Pad password bytes to size of 128 node passwords
-    passwords_bytes += b"\x00" * (128*NODE_PASSWORD_SIZE - len(passwords_bytes))
+    passwords_bytes += b"\x00" * (128 * NODE_PASSWORD_SIZE - len(passwords_bytes))
 
     decoder_key = get_decoder_key(secrets["decoder_dk"], device_id)
     nonce = get_random_bytes(12)

@@ -335,5 +335,7 @@ wolfssl/
 
 !device/lib
 msdk/
+*_build/
 *.secrets
 *.subscription
+*.tree

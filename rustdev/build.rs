@@ -11,9 +11,9 @@
 //! The build script also sets the linker flags to tell it which link script to use.
 
 use std::env;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
@@ -40,4 +40,38 @@ fn main() {
 
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
+
+    // Use the absolute path for global.secrets since it's mounted at /global.secrets.
+    let secret_path = Path::new("../global.secrets");
+    println!("cargo:rerun-if-changed=/global.secrets");
+
+    // Read the secrets file.
+    let secrets_contents =
+        fs::read_to_string(&secret_path).expect("Unable to read global.secrets file");
+
+    // Parse the JSON content.
+    let secrets_json: serde_json::Value =
+        serde_json::from_str(&secrets_contents).expect("Invalid JSON in global.secrets");
+
+    // Extract the fields you need.
+    let decoder_dk = secrets_json
+        .get("decoder_dk")
+        .and_then(|v| v.as_str())
+        .expect("Missing or invalid decoder_dk");
+    let host_key_pub = secrets_json
+        .get("host_key_pub")
+        .and_then(|v| v.as_str())
+        .expect("Missing or invalid host_key_pub");
+
+    // Generate the Rust code for the secrets.
+    let generated_code = format!(
+        "pub const DECODER_DK: &'static [u8] = b{:?};\npub const HOST_KEY_PUB: &'static [u8] = b{:?};\n",
+        decoder_dk, host_key_pub
+    );
+
+    // Write the generated code to $OUT_DIR/secrets.rs.
+    File::create(out.join("secrets.rs"))
+        .unwrap()
+        .write_all(generated_code.as_bytes())
+        .unwrap();
 }
