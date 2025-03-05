@@ -65,7 +65,7 @@ fn main() {
 
     // Generate the Rust code for the secrets.
     let generated_code = format!(
-        "pub const DECODER_DK: &str = {:?};\npub const HOST_KEY_PUB: &str = {:?};\n",
+        "pub const DECODER_DK: &'static [u8] = b{:?};\npub const HOST_KEY_PUB: &'static [u8] = b{:?};\n",
         decoder_dk, host_key_pub
     );
 
