@@ -35,13 +35,14 @@ def test_encoder(args):
     encoder = Encoder(args.secrets.read())
     nframes = math.ceil(args.test_size / args.frame_size)
     logger.info(f"Generating frames ({nframes:,} {args.frame_size}B frames)...")
+
     frames = [
         Frame(
             random.choice(args.channels),  # pick random channel
             random.randbytes(args.frame_size),  # generate random frame
-            time.time_ns() // 1000,  # generate microsecond timestamp
+            time.time_ns() + i,  # generate nanosecond timestamp, w/ slight increment to avoid duplicate timestamps
         )
-        for _ in range(nframes)
+        for i in range(nframes)
     ]
 
     logger.info("Running stress test...")
