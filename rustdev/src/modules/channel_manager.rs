@@ -1,4 +1,4 @@
-use crate::modules::flash_manager::{FlashError, FlashManager, MyFlashError};
+use crate::modules::flash_manager::{FlashManager, FlashManagerError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody, MessageHeader};
 use bytemuck::{Pod, Zeroable};
 use ed25519_dalek::{Signature, Verifier, SigningKey, pkcs8::DecodePrivateKey};
@@ -7,12 +7,12 @@ use ed25519_dalek::{Signature, Verifier, SigningKey, pkcs8::DecodePrivateKey};
 pub enum SubscriptionError {
     InvalidChannelId,
     NoPageFound,
-    FlashError(FlashError),
+    FlashManagerError(FlashManagerError),
 }
 
-impl From<FlashError> for SubscriptionError {
-    fn from(error: FlashError) -> Self {
-        SubscriptionError::FlashError(error)
+impl From<FlashManagerError> for SubscriptionError {
+    fn from(error: FlashManagerError) -> Self {
+        SubscriptionError::FlashManagerError(error)
     }
 }
 
@@ -163,9 +163,9 @@ pub fn save_subscription(
 pub fn read_channel(
     flash_manager: &mut FlashManager,
     address: u32,
-) -> Result<ChannelInfo, MyFlashError> {
+) -> Result<ChannelInfo, FlashManagerError> {
     match flash_manager.read_magic(address) {
         Ok(_) => Ok(flash_manager.read_data::<ChannelSubscription>(address)?.info),
-        Err(e) => Err(MyFlashError::FlashError(e)),
+        Err(e) => Err(FlashManagerError::FlashError(e)),
     }
 }
