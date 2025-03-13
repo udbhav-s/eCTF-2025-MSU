@@ -1,7 +1,10 @@
 use crate::modules::flash_manager::{FlashManager, FlashManagerError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody, MessageHeader};
 use bytemuck::{Pod, Zeroable};
-use ed25519_dalek::{Signature, Verifier, SigningKey, pkcs8::DecodePrivateKey};
+use ed25519_dalek::pkcs8::DecodePublicKey;
+use ed25519_dalek::VerifyingKey;
+use ed25519_dalek::{Signature, Verifier};
+use crate::{HOST_KEY_PUB, DECODER_ID};
 
 #[derive(Debug)]
 pub enum SubscriptionError {
@@ -47,14 +50,7 @@ pub fn check_subscription_valid_and_store(
     body: MessageBody,
     flash_manager: &mut FlashManager
 ) -> Result<(), ()>  {
-    let key_der = b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20\xb8\xb9\x6a\x9f\xbb\xd3\x82\xaf\xb1\xd0\x21\x11\xc5\xf6\x6d\x9e\xdb\x10\xbf\x7a\xe4\xf1\xbf\xe4\xd2\x53\x60\x28\xfb\xee\x04\x27";
-    let signing_key = SigningKey::from_pkcs8_der(key_der);
-
-    if signing_key.is_err() {
-        return Err(());
-    }
-
-    let verifying_key = signing_key.unwrap().verifying_key();
+    let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
 
     let msg_len = hdr.length as usize - 64;
     let message = &body.data[..msg_len];
@@ -85,9 +81,9 @@ pub fn check_subscription_valid_and_store(
     let mut nonce = [0u8; 12];
     nonce.copy_from_slice(&message[24..36]);
 
-    // TODO: Check decoder id is valid
-    if decoder_id != 0 {
-
+    // Check decoder id is valid
+    if decoder_id != DECODER_ID {
+        return Err(());
     }
 
     // Check if channel is channel 0
