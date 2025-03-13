@@ -256,6 +256,6 @@ def gen_secrets(channels: list[int]) -> bytes:
     return json.dumps(secrets).encode()
 
 
-# if __name__ == '__main__':
+# if __name__ == "__main__":
 #     test = ChannelTreeNode(node_num=1, key=b"0000")
 #     print(get_channel_node_cover(test))

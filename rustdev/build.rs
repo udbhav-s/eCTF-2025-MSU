@@ -15,6 +15,10 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use hex::decode;
+use hkdf::Hkdf;
+use sha2::Sha512;
+
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
@@ -63,10 +67,32 @@ fn main() {
         .and_then(|v| v.as_str())
         .expect("Missing or invalid host_key_pub");
 
+    // Get and parse the DECODER_ID from the environment.
+    let decoder_id_str =
+        env::var("DECODER_ID").expect("DECODER_ID environment variable must be set");
+
+    // Remove a potential "0x" prefix.
+    let decoder_id_str = decoder_id_str.trim_start_matches("0x");
+    let decoder_id_val: u32 =
+        u32::from_str_radix(decoder_id_str, 16).expect("Failed to parse DECODER_ID as hex");
+
+    // If you want an explicit little-endian byte array:
+    let decoder_id_le = decoder_id_val.to_le_bytes();
+
+    // HKDF Derivation
+    // Use decoder_dk as the master key and the little-endian decoder id as the context/info.
+    let decoder_dk_bytes = decode(decoder_dk).expect("Invalid hex in decoder_dk");
+    let hk = Hkdf::<Sha512>::new(None, &decoder_dk_bytes);
+    let mut decoder_key = [0u8; 32];
+    hk.expand(&decoder_id_le, &mut decoder_key)
+        .expect("HKDF expansion failed");
+
     // Generate the Rust code for the secrets.
     let generated_code = format!(
-        "pub const DECODER_DK: &'static [u8] = b{:?};\npub const HOST_KEY_PUB: &'static [u8] = b{:?};\n",
-        decoder_dk, host_key_pub
+        "pub const DECODER_KEY: [u8; 32] = {:?};\n\
+        pub const HOST_KEY_PUB: &'static [u8] = b{:?};\n\
+        pub const DECODER_ID: [u8; 4] = {:?};\n",
+        decoder_key, host_key_pub, decoder_id_le
     );
 
     // Write the generated code to $OUT_DIR/secrets.rs.
