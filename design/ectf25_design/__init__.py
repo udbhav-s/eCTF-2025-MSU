@@ -10,7 +10,7 @@ from dataclasses import dataclass
 class Secrets(TypedDict):
     channels: Dict[str, str]  # Maps channel IDs to hex-encoded 16-byte secrets
     decoder_dk: str  # Hex-encoded 32-byte decoder key
-    host_key: str  # PEM-encoded Ed25519 host key
+    host_key: str  # Ed25519 host key in DER encoded as hex
 
 
 @dataclass
@@ -236,22 +236,21 @@ def gen_secrets(channels: list[int]) -> bytes:
 
     decoder_dk = get_random_bytes(32).hex()
 
+    
     # Generate Ed25519 private key
     host_key = ECC.generate(curve="Ed25519")
-
-    # Export private key in PEM format
-    host_key_pem = host_key.export_key(format="PEM")
+    host_key_der = host_key.export_key(format='DER').hex()
 
     # Extract public key
     host_public_key = host_key.public_key()
-    host_public_key_pem = host_public_key.export_key(format="PEM")
+    host_public_key_der = host_public_key.export_key(format="DER").hex()
 
     # Create the secrets object
     secrets: Secrets = {
         "channels": channel_secrets,
         "decoder_dk": decoder_dk,
-        "host_key_priv": host_key_pem,
-        "host_key_pub": host_public_key_pem,
+        "host_key_priv": host_key_der,
+        "host_key_pub": host_public_key_der,
     }
 
     return json.dumps(secrets).encode()

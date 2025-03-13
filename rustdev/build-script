@@ -73,7 +73,7 @@ fi
 build() {
     echo "Building firmware with cargo build"
     if [ $EXAMPLE -eq 0 ]; then
-        cargo build
+        DECODER_ID=0xdeadbeef cargo build
     else
         cargo build --example $TARGET
     fi

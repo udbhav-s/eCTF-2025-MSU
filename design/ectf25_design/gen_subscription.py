@@ -40,8 +40,8 @@ def gen_subscription(
         - Channel ID (4 bytes)
         - Encryption nonce (12 bytes)
     Body (25 x 128 = 3200 bytes) of password bytes where a password is
-        - Trunc: Node number // 2 + 1 (1 byte)
-        - Ext: Node number % 2 (8 bytes)
+        - Trunc: Node number // 2 + 1 (8 bytes)
+        - Ext: Node number % 2 (1 byte)
         - Key: Key for node (16 bytes)
     Signature (64 bytes)
 
@@ -87,8 +87,8 @@ def gen_subscription(
     header_bytes += nonce
 
     # Load the host key and create signer
-    host_key = ECC.import_key(secrets["host_key_priv"])
-    signer = eddsa.new(host_key, "rfc8032")
+    host_key = ECC.import_key(bytes.fromhex(secrets["host_key_priv"]))
+    signer = eddsa.new(host_key, 'rfc8032')
 
     sign_contents = header_bytes + passwords_enc_bytes
     signature = signer.sign(sign_contents)

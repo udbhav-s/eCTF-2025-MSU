@@ -87,12 +87,15 @@ fn main() {
     hk.expand(&decoder_id_le, &mut decoder_key)
         .expect("HKDF expansion failed");
 
+    let host_key_pub_vec = decode(host_key_pub).expect("Invalid hex in host public key");
+    let host_key_pub_bytes = host_key_pub_vec.as_slice();
+
     // Generate the Rust code for the secrets.
     let generated_code = format!(
         "pub const DECODER_KEY: [u8; 32] = {:?};\n\
-        pub const HOST_KEY_PUB: &'static [u8] = b{:?};\n\
-        pub const DECODER_ID: [u8; 4] = {:?};\n",
-        decoder_key, host_key_pub, decoder_id_le
+        pub const HOST_KEY_PUB: &'static [u8] = &{:?};\n\
+        pub const DECODER_ID: u32 = 0x{:x};\n",
+        decoder_key, host_key_pub_bytes, decoder_id_val
     );
 
     // Write the generated code to $OUT_DIR/secrets.rs.

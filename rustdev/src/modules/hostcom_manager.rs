@@ -28,7 +28,7 @@ pub struct MessageHeader {
 #[repr(C, packed)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct MessageBody {
-    pub data: [u8; 1024],
+    pub data: [u8; 4096],
     pub length: u16,
 }
 
@@ -163,7 +163,7 @@ pub fn write_channel<U: UartHalOps>(console: &mut U, channel: &ChannelInfo) -> i
 pub fn write_list<U: UartHalOps>(console: &mut U, flash_manager: &mut FlashManager) -> i32 {
     let mut count: u32 = 0;
     for i in 0..8 {
-        let addr = 0x1006_0000 + (i as u32 * 0x2000);
+        let addr = 0x1006_2000 + (i as u32 * 0x2000);
         if flash_manager.read_magic(addr).unwrap_or(0) == 0xABCD {
             count += 1;
         }
@@ -186,7 +186,7 @@ pub fn write_list<U: UartHalOps>(console: &mut U, flash_manager: &mut FlashManag
         console.write_byte(b);
     }
     for i in 0..count {
-        let addr = 0x1006_0000 + (i as u32 * 0x2000);
+        let addr = 0x1006_2000 + (i as u32 * 0x2000);
         let ch = read_channel(flash_manager, addr).unwrap();
         if write_channel(console, &ch) != 0 {
             return -1;
