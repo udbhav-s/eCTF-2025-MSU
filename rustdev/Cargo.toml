@@ -26,8 +26,8 @@ rand = { version = "0.8.5", default-features = false }
 # Set the default for dependencies in Development mode.
 opt-level = 3
 
-[profile.dev] # Turn on a small amount of optimisation in Development mode.
-opt-level = 1
+# [profile.dev] # Turn on a small amount of optimisation in Development mode.
+# opt-level = 1
 
 
 [[bin]]
