@@ -16,17 +16,25 @@ cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = { version = "0.7.5", features = ["set-sp", "set-vtor"] }
 embedded-hal-nb = "1.0.0"
 embedded-io = "0.6.1"
-max7800x-hal = { version = "0.7.1" }
+max7800x-hal = { version = "0.7.1", features=["flashprog-linkage"] }
 md-5 = {version = "0.10.6", default-features = false}
 ed25519-dalek = {version = "2", default-features=false, features=["pkcs8"]}
 panic-halt = "1.0.0"
 rand = { version = "0.8.5", default-features = false }
+
+[profile.dev.package."*"]
+# Set the default for dependencies in Development mode.
+opt-level = 3
+
+[profile.dev] # Turn on a small amount of optimisation in Development mode.
+opt-level = 1
 
 
 [[bin]]
 name = "eCTF_2025_MSU"
 test = false
 bench = false
+
 
 # Uncomment if you want to use semihosting
 # cortex-m-semihosting = "0.5"
