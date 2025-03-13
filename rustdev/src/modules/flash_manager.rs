@@ -47,8 +47,8 @@ impl FlashManager {
         // Total bytes = magic (4 bytes) + data
         let total_bytes = 4 + data_bytes.len();
         // For this example we use a stack buffer of fixed size.
-        assert!(total_bytes <= 1024, "Combined data too large for buffer");
-        let mut buffer = [0u8; 1024];
+        assert!(total_bytes <= 4096, "Combined data too large for buffer");
+        let mut buffer = [0u8; 4096];
 
         // Write the magic (in little-endian order) into the first 4 bytes.
         buffer[..4].copy_from_slice(&magic.to_le_bytes());
@@ -90,10 +90,10 @@ impl FlashManager {
         let chunks = (total_bytes + 15) / 16;
         // For demonstration, we use a fixed-size buffer.
         assert!(
-            chunks * 16 <= 256,
+            chunks * 16 <= 4096,
             "Data too large for our temporary buffer"
         );
-        let mut buffer = [0u8; 256];
+        let mut buffer = [0u8; 4096];
         for i in 0..chunks {
             let addr = start_address + (i as u32 * 16);
             let word_arr = self.flc.read_128(addr)?;

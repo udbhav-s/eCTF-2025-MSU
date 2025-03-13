@@ -81,7 +81,7 @@ fn main() -> ! {
         match hdr.opcode {
             x if x == MsgType::List as u8 => {
                 let _ = write_ack(&mut console);
-                write_debug(&mut console, "List section in rust\n");
+                write_debug(&mut console, "Hello from (release) list section in rust\n");
                 let _ = write_list(&mut console, &mut flash_manager);
             }
             x if x == MsgType::Subscribe as u8 => {
