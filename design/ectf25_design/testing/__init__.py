@@ -6,6 +6,7 @@ import json
 import random
 import struct
 from ectf25_design import gen_secrets, ChannelKeyDerivation, ChannelTreeNode
+from ectf25_design.encoder import Encoder
 from ectf25_design.gen_subscription import gen_subscription
 from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
@@ -214,7 +215,7 @@ class TestKeyGeneration(unittest.TestCase):
                 frame = random.randint(start, end)
                 
                 # Get key using both methods
-                direct_key = deriv.get_frame_key(frame).key
+                direct_key = deriv.get_frame_key(frame)
                 cover_key = deriv.get_frame_key_from_cover(keys, frame)
                 
                 # Keys should match
@@ -315,6 +316,48 @@ class TestGenSubscription(unittest.TestCase):
         
         with self.assertRaises(ValueError):
             verifier.verify(content, modified_signature)
+
+class TestEncoder(unittest.TestCase):
+    def setUp(self):
+        """Set up test environment with secrets and test parameters"""
+        random.seed(0xdedbeef)
+
+        self.secrets = get_secrets()
+
+        self.host_key = ECC.import_key(bytes.fromhex(self.secrets["host_key_priv"]))
+
+        secrets_bytes = json.dumps(self.secrets).encode()
+        self.encoder = Encoder(secrets_bytes)
+
+    def test_encode(self):
+        """Test the encode function of the Encoder class"""
+        channel = 1
+        frame = b"Test frame data"
+        timestamp = 1234567890
+
+        # Encode the frame
+        encoded_frame = self.encoder.encode(channel, frame, timestamp)
+
+        # Verify the encoded frame structure
+        # Check that the encoded frame is not empty
+        self.assertTrue(encoded_frame)
+
+        # Check that the encoded frame has the expected length
+        # 16 bytes for header (4 for channel, 8 for timestamp, 12 for nonce)
+        # + length of encrypted frame + 64 bytes for signature
+        expected_length = 4 + 8 + 12 + len(frame) + 64
+        self.assertEqual(len(encoded_frame), expected_length)
+
+        # Verify the signature
+        content = encoded_frame[:-64]  # Everything except last 64 bytes
+        signature = encoded_frame[-64:]  # Last 64 bytes
+
+        # Create verifier using host's public key
+        public_key = self.host_key.public_key()
+        verifier = eddsa.new(public_key, 'rfc8032')
+
+        # Verify signature is valid
+        verifier.verify(content, signature)
 
 
 if __name__ == '__main__':

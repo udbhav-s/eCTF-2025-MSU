@@ -151,10 +151,16 @@ class ChannelKeyDerivation:
 
         return nodes
 
+    def extend_key(self, key: bytes) -> bytes:
+        """Extends 16-byte key to 32 by returning (k | H(k))"""
+        return key + MD5.new(key).digest()
+
     def get_frame_key(self, frame_num: int) -> bytes:
-        """Returns the key to be used for encrypting a given frame, based on the hash tree derivation"""
+        """Returns a 16-byte key to be used for encrypting a given frame, based on the hash tree derivation"""
         node_num = frame_num + 2**self.height
-        return self.get_key_for_node(node_num)
+        node = self.get_key_for_node(node_num)
+        return node.key
+
 
     def get_frame_key_from_cover(self, nodes: List[ChannelTreeNode], frame_num: int):
         """Given a cover of the tree and a frame to decode, verify that the frame can be decoded
