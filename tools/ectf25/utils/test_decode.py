@@ -10,7 +10,7 @@ from ectf25_design import Secrets
 from ectf25.utils.decoder import DecoderIntf
 
 def get_secrets() -> Secrets:
-    with open("../../../global.secrets") as f:
+    with open("global.secrets") as f:
         return json.loads(f.read())
 
 class DecoderTester():
@@ -27,7 +27,7 @@ class DecoderTester():
 
     def test_decode(self):
         """Test the encode function of the Encoder class"""
-        channel = 1
+        channel = 3
         frame = b"Test frame data"
         frame = frame + b"\x00"*(64 - len(frame))
         timestamp = 1234567890
@@ -66,6 +66,12 @@ class DecoderTester():
         # Decrypt the frame data
         cipher = ChaCha20.new(key=frame_key, nonce=nonce)
         decrypted_frame = cipher.decrypt(encrypted_frame_data)
+
+        # Decode frame
+        decoder = DecoderIntf("/dev/ttyACM0")
+        decoded_frame = decoder.decode(encoded_frame)
+
+        print(decoded_frame)
 
 
 if __name__ == '__main__':

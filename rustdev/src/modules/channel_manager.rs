@@ -224,15 +224,15 @@ pub fn decode_frame(
 
     let subscription = flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?;
 
-    let mut node_num: u128 = frame.timestamp as u128 + (1 as u128)<<64;
+    let mut node_num: u128 = (frame.timestamp as u128) + ((1 as u128) << 64);
 
     let mut path: [u8; 64] = [0; 64];
-    let mut path_len: usize= 0;
+    let mut path_idx = 64;
 
     while node_num > 1 {
         let branch: u8 = (node_num % 2 + 1).try_into().unwrap();
-        path[path_len] = branch;
-        path_len += 1;
+        path[path_idx-1] = branch;
+        path_idx -= 1;
         node_num = node_num / 2;
     }
 
@@ -242,7 +242,7 @@ pub fn decode_frame(
 
     node_num = 1;
     let mut i = 0;
-    while i < path_len {
+    while i < 64 {
         // Look for corresponding node in subscription package
         for sub_idx in 0..128 {
             let c = &subscription.passwords.contents[sub_idx];
@@ -258,6 +258,10 @@ pub fn decode_frame(
             }
         }
 
+        if password_node.is_some() {
+            break;
+        }
+
         // Go to next child according to branch path
         node_num = node_num * 2 + (path[i] - 1) as u128;
         i += 1;
@@ -269,7 +273,7 @@ pub fn decode_frame(
 
     let mut password_bytes: [u8; 16] = password_node.ok_or(())?.password;
 
-    for &branch in &path[i..path_len] {
+    for branch in path.iter() {
         let mut hasher = Md5::new();
 
         let mut pass_in: [u8; 17] = [0; 17];

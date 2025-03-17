@@ -120,7 +120,7 @@ fn main() -> ! {
 
                 let body = read_body(&mut console, hdr.length);
 
-                let frame: &ChannelFrame = bytemuck::from_bytes::<ChannelFrame>(&body.data);
+                let frame: &ChannelFrame = bytemuck::from_bytes::<ChannelFrame>(&body.data[0..core::mem::size_of::<ChannelFrame>()]);
 
                 if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
                     // Prepare a decode response header.
