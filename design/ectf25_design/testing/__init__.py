@@ -17,6 +17,8 @@ from typing import List, Tuple
 
 def get_secrets(channels = [1, 3, 4]) -> Secrets:
     return json.loads(gen_secrets(channels).decode())
+    # with open("../../global.secrets") as f:
+    #     return json.loads(f.read())
 
 class TestGenSecrets(unittest.TestCase):
     def test_valid_secret_keys(self):
