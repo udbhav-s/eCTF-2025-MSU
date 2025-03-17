@@ -10,6 +10,7 @@ from ectf25_design.encoder import Encoder
 from ectf25_design.gen_subscription import gen_subscription
 from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
+from Crypto.Cipher import ChaCha20
 from Crypto.Hash import SHA512
 from ectf25_design import Secrets
 from typing import List, Tuple
@@ -333,6 +334,7 @@ class TestEncoder(unittest.TestCase):
         """Test the encode function of the Encoder class"""
         channel = 1
         frame = b"Test frame data"
+        frame = frame + b"\x00"*(64 - len(frame))
         timestamp = 1234567890
 
         # Encode the frame
@@ -358,6 +360,23 @@ class TestEncoder(unittest.TestCase):
 
         # Verify signature is valid
         verifier.verify(content, signature)
+
+        # Decrypt and verify frame contents
+        header = content[:24]
+        encrypted_frame_data = content[24:]
+        channel, timestamp, nonce = struct.unpack("<IQ12s", header)
+
+        # Derive the frame key
+        channel_root = bytes.fromhex(self.secrets["channels"][str(channel)])
+        deriv = ChannelKeyDerivation(root=channel_root, height=64)
+        frame_key = deriv.extend_key(deriv.get_frame_key(timestamp))
+
+        # Decrypt the frame data
+        cipher = ChaCha20.new(key=frame_key, nonce=nonce)
+        decrypted_frame = cipher.decrypt(encrypted_frame_data)
+
+        # Verify the decrypted frame matches the original frame
+        self.assertEqual(decrypted_frame, frame)
 
 
 if __name__ == '__main__':
