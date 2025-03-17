@@ -6,6 +6,7 @@ use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::{Signature, Verifier};
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
+use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY};
 
 #[derive(Debug)]
@@ -40,6 +41,16 @@ pub struct ChannelPasswords {
 pub struct ChannelSubscription {
     pub info: ChannelInfo,
     pub passwords: ChannelPasswords,
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct ChannelFrame {
+    pub channel: u32,
+    pub timestamp: u64,
+    pub nonce: [u8; 12],
+    pub encrypted_content: [u8; 64],
+    pub signature: [u8; 64],
 }
 
 // const PAGE_SIZE: u32 = 0x2000;
@@ -93,7 +104,6 @@ pub fn check_subscription_valid_and_store(
         return Err(());
     }
 
-    // TODO: Decrypt channel passwords using the decoder key and nonce
     let mut cipher = ChaCha20::new(&DECODER_KEY.into(), &nonce.into());
 
     let mut passwords_data: [u8; 128*25] = [0; 128*25];
@@ -117,6 +127,35 @@ pub fn check_subscription_valid_and_store(
 
     // Store the subscription
     return save_subscription(flash_manager, channel_subscription).map_err(|_| ());
+}
+
+fn get_subscription_addr(
+    flash_manager: &mut FlashManager,
+    channel_id: u32
+) -> Option<u32> {
+    let mut page_addr: Option<u32> = None;
+    
+    for i in 0..8 {
+        // TODO: move flash base to a constants file, as well as flash magic
+        let addr = 0x1006_2000 + (i as u32 * 0x2000);
+        match flash_manager.read_magic(addr) {
+            // Magic present, the page is occupied
+            Ok(0xABCD) => {
+                // Read the ChannelInfo header for the subscription
+                if let Ok(stored_sub) = flash_manager.read_data::<ChannelInfo>(addr) {
+                    if stored_sub.channel_id == channel_id {
+                        // Found a matching subscription
+                        page_addr = Some(addr);
+                        break;
+                    }
+                }
+            },
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+
+    return page_addr;
 }
 
 pub fn save_subscription(
@@ -172,4 +211,98 @@ pub fn read_channel(
         Ok(_) => Ok(flash_manager.read_data::<ChannelSubscription>(address)?.info),
         Err(e) => Err(FlashManagerError::FlashError(e)),
     }
+}
+
+pub fn decode_frame(
+    flash_manager: &mut FlashManager,
+    frame: &ChannelFrame,
+) -> Result<[u8; 64], ()> {
+    let sub_page_addr = match get_subscription_addr(flash_manager, frame.channel) {
+        Some(addr) => addr,
+        None => return Err(()),
+    };
+
+    let subscription = flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?;
+
+    let mut node_num: u128 = frame.timestamp as u128 + (1 as u128)<<64;
+
+    let mut path: [u8; 64] = [0; 64];
+    let mut path_len: usize= 0;
+
+    while node_num > 1 {
+        let branch: u8 = (node_num % 2 + 1).try_into().unwrap();
+        path[path_len] = branch;
+        path_len += 1;
+        node_num = node_num / 2;
+    }
+
+    let mut password_node: Option<ChannelPassword> = None;
+
+    // let path_idx: usize = 0;
+
+    node_num = 1;
+    let mut i = 0;
+    while i < path_len {
+        // Look for corresponding node in subscription package
+        for sub_idx in 0..128 {
+            let c = &subscription.passwords.contents[sub_idx];
+            // Password is uninitialized, break
+            if c.node_ext == 0 {
+                break;
+            }
+            
+            let c_node_num: u128 = (c.node_trunc * 2) as u128 + (c.node_ext - 1) as u128;
+            if c_node_num == node_num {
+                password_node = Some(*c);
+                break;
+            }
+        }
+
+        // Go to next child according to branch path
+        node_num = node_num * 2 + (path[i] - 1) as u128;
+        i += 1;
+    }
+
+    if password_node.is_none() {
+        return Err(());
+    }
+
+    let mut password_bytes: [u8; 16] = password_node.ok_or(())?.password;
+
+    for &branch in &path[i..path_len] {
+        let mut hasher = Md5::new();
+
+        let mut pass_in: [u8; 17] = [0; 17];
+        pass_in[..16].copy_from_slice(&password_bytes);
+
+        match branch {
+            1 => {
+                pass_in[16] = b'L';
+            }
+            2 => {
+                pass_in[16] = b'R';
+            }
+            _ => return Err(())
+        }
+
+        hasher.update(&pass_in);
+        password_bytes = hasher.finalize().into();
+    }
+
+    // Extend password to 32 bytes
+    let mut extended_password: [u8; 32] = [0; 32];
+    extended_password[..16].copy_from_slice(&password_bytes);
+    let mut hasher = Md5::new();
+    hasher.update(&password_bytes);
+    extended_password[16..].copy_from_slice(&hasher.finalize());
+
+    // Decrypt frame
+    let mut cipher = ChaCha20::new(&extended_password.into(), &frame.nonce.into());
+
+    let mut decrypted_frame: [u8; 64] = [0; 64];
+    decrypted_frame.copy_from_slice(&frame.encrypted_content[0..64]);
+
+    cipher.apply_keystream(&mut decrypted_frame);
+
+    return Ok(decrypted_frame)
 }

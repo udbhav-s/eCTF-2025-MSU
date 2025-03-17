@@ -146,6 +146,7 @@ pub fn write_debug<U: UartHalOps>(console: &mut U, msg: &str) {
     }
 }
 
+// TODO: Check if i32 return type necessary
 /// Writes a ChannelInfo structure.
 #[inline(always)]
 pub fn write_channel<U: UartHalOps>(console: &mut U, channel: &ChannelInfo) -> i32 {

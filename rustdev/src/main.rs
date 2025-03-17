@@ -14,6 +14,7 @@ pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
 use md5::{Digest, Md5};
+use modules::channel_manager::{decode_frame, ChannelFrame};
 use modules::channel_manager::check_subscription_valid_and_store;
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
@@ -110,34 +111,53 @@ fn main() -> ! {
             }
             x if x == MsgType::Decode as u8 => {
                 let _ = write_ack(&mut console);
+
+                if hdr.length != core::mem::size_of::<ChannelFrame>() as u16 {
+                    write_debug(&mut console, "Error: Invalid frame length\n");
+                    let _ = write_error(&mut console);
+                    continue;
+                }
+
                 let body = read_body(&mut console, hdr.length);
 
-                // hashes
-                let h = b"hello world";
-                for _i in 0..64 {
-                    let mut hasher = Md5::new();
-                    hasher.update(h);
-                    let _hash = hasher.finalize();
+                let frame: &ChannelFrame = bytemuck::from_bytes::<ChannelFrame>(&body.data);
+
+                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
+                    // Prepare a decode response header.
+                    let resp_hdr = MessageHeader {
+                        magic: MSG_MAGIC,
+                        opcode: MsgType::Decode as u8,
+                        length: 64,
+                    };
+
+                    for &b in bytemuck::bytes_of(&resp_hdr) {
+                        console.write_byte(b);
+                    }
+
+                    let _ = read_ack(&mut console);
+
+                    // Write the decrypted frame
+                    for b in frame_content {
+                        console.write_byte(b);
+                    }
+                } else {
+                    write_debug(&mut console, "Error: Could not decode frame!\n");
+                    let _ = write_error(&mut console);
+                    continue;
                 }
 
-                // Prepare a decode response header.
-                let resp_hdr = MessageHeader {
-                    magic: MSG_MAGIC,
-                    opcode: MsgType::Decode as u8,
-                    length: hdr.length - 12,
-                };
-                for &b in bytemuck::bytes_of(&resp_hdr) {
-                    console.write_byte(b);
-                }
-                let _ = read_ack(&mut console);
-                // Write the decoded frame (skip the first 12 bytes).
-                for &b in &body.data[12..(hdr.length as usize)] {
-                    console.write_byte(b);
-                }
+                // hashes
+                // let h = b"hello world";
+                // for _i in 0..64 {
+                //     let mut hasher = Md5::new();
+                //     hasher.update(h);
+                //     let _hash = hasher.finalize();
+                // }
             }
             _ => {
                 // Unsupported command: send a simple error message.
-                for &b in b"We only support the List command right now!\n" {
+                // TODO: Print actual error command
+                for &b in b"Unsupported command!\n" {
                     console.write_byte(b);
                 }
             }
