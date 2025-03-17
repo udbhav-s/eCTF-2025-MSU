@@ -24,6 +24,7 @@ md-5 = {version = "0.10.6", default-features = false}
 ed25519-dalek = {version = "2", default-features=false, features=["pkcs8"]}
 panic-halt = "1.0.0"
 rand = { version = "0.8.5", default-features = false }
+chacha20 = "0.9.1"
 
 [profile.dev.package."*"]
 # Set the default for dependencies in Development mode.

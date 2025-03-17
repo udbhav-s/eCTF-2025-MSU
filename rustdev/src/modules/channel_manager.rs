@@ -4,7 +4,9 @@ use bytemuck::{Pod, Zeroable};
 use ed25519_dalek::pkcs8::DecodePublicKey;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::{Signature, Verifier};
-use crate::{HOST_KEY_PUB, DECODER_ID};
+use chacha20::ChaCha20;
+use chacha20::cipher::{KeyIvInit, StreamCipher};
+use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY};
 
 #[derive(Debug)]
 pub enum SubscriptionError {
@@ -92,9 +94,15 @@ pub fn check_subscription_valid_and_store(
     }
 
     // TODO: Decrypt channel passwords using the decoder key and nonce
+    let mut cipher = ChaCha20::new(&DECODER_KEY.into(), &nonce.into());
+
+    let mut passwords_data: [u8; 128*25] = [0; 128*25];
+    passwords_data.copy_from_slice(&message[36..36+(128*25)]);
+
+    cipher.apply_keystream(&mut passwords_data);
 
     // Parse the passwords into ChannelPasswords
-    let passwords = bytemuck::from_bytes::<ChannelPasswords>(&message[36..36+(128*25)]);
+    let passwords = bytemuck::from_bytes::<ChannelPasswords>(&passwords_data);
 
     let channel_info = ChannelInfo {
         channel_id,
