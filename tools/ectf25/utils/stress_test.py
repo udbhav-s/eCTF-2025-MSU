@@ -136,9 +136,7 @@ def parse_args():
         "-c",
         action="append",
         type=int,
-        # default=[0, 1, 2, 3],
-        # TODO: Replace with default
-        default=[3],
+        default=[0, 1, 2, 3],
         help="Channels to randomly chose from (NOTE: 0 is broadcast)",
     )
 
