@@ -1,5 +1,7 @@
 ## Project .gitignore ##
 
+dumped_frames.json
+
 .DS_Store
 .vscode/
 **/gcc

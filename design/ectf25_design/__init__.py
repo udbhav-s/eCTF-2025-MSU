@@ -130,9 +130,6 @@ class ChannelKeyDerivation:
             traversal.append(n % 2)
             n = n // 2
 
-        print(f"GETTING KEY FOR NODE f{node_num}")
-        print(f"ROOT KEY: {self.root.decode()}")
-
         # Traverse from root, generating subkeys along the way
         curr_key = self.root
         for t in traversal[::-1]:
@@ -140,7 +137,6 @@ class ChannelKeyDerivation:
                 curr_key = self.get_left_subkey(curr_key)
             else:
                 curr_key = self.get_right_subkey(curr_key)
-            print(f"NEXT KEY: {curr_key.decode()}")
 
         return ChannelTreeNode(node_num=node_num, key=curr_key)
 
