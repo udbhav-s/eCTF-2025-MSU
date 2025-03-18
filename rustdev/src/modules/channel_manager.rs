@@ -7,32 +7,7 @@ use ed25519_dalek::{Signature, Verifier};
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
-use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY};
-
-const CHANNEL_0_SUBSCRIPTION_TEST: ChannelSubscription = ChannelSubscription {
-    info: ChannelInfo {
-        channel_id: 0,
-        start_timestamp: 0,
-        end_timestamp: u64::MAX,
-    },
-    passwords: ChannelPasswords {
-        contents: {
-            let mut contents: [ChannelPassword; 128] = [ChannelPassword {
-                node_trunc: 0,
-                node_ext: 0,
-                password: [0; 16],
-            }; 128];
-            
-            contents[0] = ChannelPassword {
-                node_trunc: 0,
-                node_ext: 2,
-                password: [0; 16],
-            };
-
-            contents
-        }
-    }
-};
+use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY, CHANNEL_0_SUBSCRIPTION};
 
 #[derive(Debug)]
 pub enum SubscriptionError {
@@ -244,7 +219,7 @@ pub fn decode_frame(
 ) -> Result<[u8; 64], ()> {
     let subscription: &ChannelSubscription = match frame.channel {
         0 => {
-            &CHANNEL_0_SUBSCRIPTION_TEST
+            &CHANNEL_0_SUBSCRIPTION
         }
         _ => {
             let sub_page_addr = match get_subscription_addr(flash_manager, frame.channel) {
