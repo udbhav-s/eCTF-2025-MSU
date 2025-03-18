@@ -90,12 +90,50 @@ fn main() {
     let host_key_pub_vec = decode(host_key_pub).expect("Invalid hex in host public key");
     let host_key_pub_bytes = host_key_pub_vec.as_slice();
 
+    // Extract the channel 0 password bytes from the JSON.
+    let channel_0_password_hex = secrets_json["channels"]["0"]
+        .as_str()
+        .expect("Missing channel 0 password");
+    let channel_0_password_vec =
+        decode(channel_0_password_hex).expect("Invalid hex for channel 0 password");
+    let channel_0_password: [u8; 16] = channel_0_password_vec
+        .try_into()
+        .expect("Channel 0 password must be exactly 16 bytes");
+
     // Generate the Rust code for the secrets.
     let generated_code = format!(
-        "pub const DECODER_KEY: [u8; 32] = {:?};\n\
-        pub const HOST_KEY_PUB: &'static [u8] = &{:?};\n\
-        pub const DECODER_ID: u32 = 0x{:x};\n",
-        decoder_key, host_key_pub_bytes, decoder_id_val
+        "use crate::modules::channel_manager::{{ChannelSubscription, ChannelPasswords, ChannelPassword}};\n\
+         use crate::modules::hostcom_manager::ChannelInfo;\n\n\
+         pub const DECODER_KEY: [u8; 32] = {:?};\n\
+         pub const HOST_KEY_PUB: &'static [u8] = &{:?};\n\
+         pub const DECODER_ID: u32 = 0x{:x};\n\n\
+         pub const CHANNEL_0_SUBSCRIPTION: ChannelSubscription = ChannelSubscription {{
+             info: ChannelInfo {{
+                 channel_id: 0,
+                 start_timestamp: 0,
+                 end_timestamp: u64::MAX,
+             }},
+             passwords: ChannelPasswords {{
+                 contents: {{
+                     let mut contents: [ChannelPassword; 128] = [ChannelPassword {{
+                         node_trunc: 0,
+                         node_ext: 0,
+                         password: [0; 16],
+                     }}; 128];
+                     
+                     contents[0] = ChannelPassword {{
+                         node_trunc: 0,
+                         node_ext: 2,
+                         password: {:?},
+                     }};
+                     contents
+                 }}
+             }}
+         }};\n",
+        decoder_key,
+        host_key_pub_bytes,
+        decoder_id_val,
+        channel_0_password
     );
 
     // Write the generated code to $OUT_DIR/secrets.rs.

@@ -35,7 +35,7 @@ ENV PATH="/root/.cargo/bin:$PATH"
 ENV CARGO_TARGET_DIR=/decoder/target
 
 # Define build process
-ENTRYPOINT ["bash", "-c", "cargo build -r -q && cp target/thumbv7em-none-eabihf/release/eCTF_2025_MSU /out/max78000.elf && arm-none-eabi-objcopy -O binary /out/max78000.elf /out/max78000.bin"]
+ENTRYPOINT ["bash", "-c", "cargo build && cp target/thumbv7em-none-eabihf/debug/eCTF_2025_MSU /out/max78000.elf && arm-none-eabi-objcopy -O binary /out/max78000.elf /out/max78000.bin"]
 
 # Build:
 # docker build -t decoder ./decoder

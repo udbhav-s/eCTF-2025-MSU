@@ -13,9 +13,8 @@ pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
-use md5::{Digest, Md5};
-use modules::channel_manager::{decode_frame, ChannelFrame};
 use modules::channel_manager::check_subscription_valid_and_store;
+use modules::channel_manager::{decode_frame, ChannelFrame};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
@@ -33,7 +32,10 @@ fn main() -> ! {
 
     // Initialize system peripherals and clocks.
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
-    let ipo: hal::gcr::clocks::Oscillator<hal::gcr::clocks::InternalPrimaryOscillator, hal::gcr::clocks::Enabled> = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
+    let ipo: hal::gcr::clocks::Oscillator<
+        hal::gcr::clocks::InternalPrimaryOscillator,
+        hal::gcr::clocks::Enabled,
+    > = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
 
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral.
@@ -120,7 +122,9 @@ fn main() -> ! {
 
                 let body = read_body(&mut console, hdr.length);
 
-                let frame: &ChannelFrame = bytemuck::from_bytes::<ChannelFrame>(&body.data[0..core::mem::size_of::<ChannelFrame>()]);
+                let frame: &ChannelFrame = bytemuck::from_bytes::<ChannelFrame>(
+                    &body.data[0..core::mem::size_of::<ChannelFrame>()],
+                );
 
                 if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
                     // Prepare a decode response header.
