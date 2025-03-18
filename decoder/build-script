@@ -2,13 +2,14 @@
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 build|flash|qemu|where target [-e]"
+    echo "Usage: $0 build|flash|qemu|where target [-e] [--release]"
     echo "build: Run cargo build and objcopy"
     echo "flash: Run the eCTF Flash tool"
     echo "qemu: Run the 2025 QEMU setup with GDB (needs tmux)"
     echo "where: Print the location of the target binary"
-    echo "For working with the examples directory, use the -e flag" 
-    echo "Example: $0 build -e uart-simple"
+    echo "For working with the examples directory, use the -e flag"
+    echo "Use --release to build in release mode"
+    echo "Example: $0 build -e uart-simple --release"
     exit 1
 }
 
@@ -16,17 +17,18 @@ usage() {
 EXAMPLE=0
 TARGET=""
 ARGUMENT=""
+RELEASE=0
 
 # Define paths
 RUST_TEMPLATE_PATH=$(dirname "$(realpath $0)")
 ECTF_REF_PATH=$(realpath "$RUST_TEMPLATE_PATH/../")
-RUST_BIN_PATH=target/thumbv7em-none-eabihf/debug
+RUST_BIN_PATH=target/thumbv7em-none-eabihf
 QEMU_PATH=/home/udbhav/Documents/ectf-2025/MSU-eCTF2025-SIM/qemu-mitre2025
 
 BOARD_TTY=/dev/ttyACM0 
 
 # Parse command-line options
-TEMP=$(getopt -o e --name "$0" -- "$@")
+TEMP=$(getopt -o e --long release --name "$0" -- "$@")
 if [ $? -ne 0 ]; then
     usage
 fi
@@ -39,6 +41,10 @@ while true; do
     case "$1" in
         -e)
             EXAMPLE=1
+            shift
+            ;;
+        --release)
+            RELEASE=1
             shift
             ;;
         --)
@@ -65,17 +71,31 @@ else
     TARGET=$2
 fi
 
+# Determine the build type path
+if [ $RELEASE -eq 1 ]; then
+    BUILD_TYPE_PATH=release
+else
+    BUILD_TYPE_PATH=debug
+fi
+
 # Append /examples to RUST_BIN_PATH if -e flag is set
 if [ $EXAMPLE -eq 1 ]; then
-    RUST_BIN_PATH+=/examples
+    RUST_BIN_PATH+="/$BUILD_TYPE_PATH/examples"
+else
+    RUST_BIN_PATH+="/$BUILD_TYPE_PATH"
 fi
 
 build() {
     echo "Building firmware with cargo build"
+    BUILD_CMD="cargo build"
+    if [ $RELEASE -eq 1 ]; then
+        BUILD_CMD+=" --release"
+    fi
+
     if [ $EXAMPLE -eq 0 ]; then
-        cargo build
+        DECODER_ID=0xdeadbeef $BUILD_CMD
     else
-        cargo build --example $TARGET
+        $BUILD_CMD --example $TARGET
     fi
 
     # Log objcopy

@@ -10,20 +10,16 @@ ARG DEBIAN_FRONTEND=noninteractive
 WORKDIR /root
 
 # Install requisite packages
-RUN apt-get update && apt-get upgrade -y && apt-get install -y \
-    gdb \
-    gdb-multiarch \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     gcc-arm-none-eabi \
     binutils-arm-none-eabi \
-    python3.10 \
     git \
-    wget \
-    unzip \
     curl \
-    clang \
-    lld \
+    ca-certificates \
+    libssl-dev \
     pkg-config \
-    libssl-dev
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Rust nightly and cargo tools
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
@@ -32,13 +28,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && rustup target add thumbv7em-none-eabihf \
     && cargo install cargo-generate
 
-# # Install MSDK
-# RUN wget https://github.com/analogdevicesinc/msdk/archive/refs/tags/v2024_02.zip \
-#     && unzip v2024_02.zip \
-#     && rm -f v2024_02.zip
-
-ENV MAXIM_PATH=/root/msdk-2024_02
-
 WORKDIR /decoder
 
 # Set environment variables for Rust
@@ -46,11 +35,11 @@ ENV PATH="/root/.cargo/bin:$PATH"
 ENV CARGO_TARGET_DIR=/decoder/target
 
 # Define build process
-ENTRYPOINT ["bash", "-c", "cargo build -q -r && cp target/thumbv7em-none-eabihf/release/eCTF_2025_MSU /out/max78000.elf && arm-none-eabi-objcopy -O binary /out/max78000.elf /out/max78000.bin"]
+ENTRYPOINT ["bash", "-c", "cargo build && cp target/thumbv7em-none-eabihf/debug/eCTF_2025_MSU /out/max78000.elf && arm-none-eabi-objcopy -O binary /out/max78000.elf /out/max78000.bin"]
 
 # Build:
-# docker build -t rust-firmware-builder .
+# docker build -t decoder ./decoder
 
 # Sample run command:
-# docker run --rm -v ./build_out:/out -v ./:/decoder rust-firmware-builder
+# docker run -v ./rustdev/:/decoder -v ./global.secrets:/global.secrets:ro -v ./deadbeef_build:/out -e DECODER_ID=0xdeadbeef decoder
 

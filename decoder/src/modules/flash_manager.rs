@@ -8,16 +8,16 @@ use core::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 
 #[derive(Debug)]
-pub enum MyFlashError {
+pub enum FlashManagerError {
     /// An error occurred in the underlying flash operations.
     FlashError(FlashError),
     /// The magic value in flash did not match the expected value.
     MagicMismatch,
 }
 
-impl From<FlashError> for MyFlashError {
+impl From<FlashError> for FlashManagerError {
     fn from(err: FlashError) -> Self {
-        MyFlashError::FlashError(err)
+        FlashManagerError::FlashError(err)
     }
 }
 
@@ -41,14 +41,15 @@ impl FlashManager {
         start_address: u32,
         magic: u32,
         data: &T,
-    ) -> Result<(), FlashError> {
+    ) -> Result<(), FlashManagerError> {
         // Convert the data to a byte slice.
         let data_bytes = bytemuck::bytes_of(data);
         // Total bytes = magic (4 bytes) + data
         let total_bytes = 4 + data_bytes.len();
         // For this example we use a stack buffer of fixed size.
-        assert!(total_bytes <= 1024, "Combined data too large for buffer");
-        let mut buffer = [0u8; 1024];
+        // TODO: Do we need to copy to a buffer? Check if bytes can be written from data_bytes directly.
+        assert!(total_bytes <= 4096, "Combined data too large for buffer");
+        let mut buffer = [0u8; 4096];
 
         // Write the magic (in little-endian order) into the first 4 bytes.
         buffer[..4].copy_from_slice(&magic.to_le_bytes());
@@ -83,17 +84,17 @@ impl FlashManager {
     /// This function reads enough bytes to cover a 4-byte magic value plus the size of T.
     /// It then checks that the first 4 bytes match `expected_magic`. If so, it returns the T
     /// (constructed from the bytes following the magic). Otherwise, it returns an error.
-    pub fn read_data<T: Pod + Zeroable>(&mut self, start_address: u32) -> Result<T, MyFlashError> {
+    pub fn read_data<T: Pod + Zeroable>(&mut self, start_address: u32) -> Result<T, FlashManagerError> {
         let data_size = size_of::<T>();
         // Total bytes to read = 4 (magic) + size of data.
         let total_bytes = 4 + data_size;
         let chunks = (total_bytes + 15) / 16;
         // For demonstration, we use a fixed-size buffer.
         assert!(
-            chunks * 16 <= 256,
+            chunks * 16 <= 4096,
             "Data too large for our temporary buffer"
         );
-        let mut buffer = [0u8; 256];
+        let mut buffer = [0u8; 4096];
         for i in 0..chunks {
             let addr = start_address + (i as u32 * 16);
             let word_arr = self.flc.read_128(addr)?;
@@ -109,9 +110,9 @@ impl FlashManager {
     }
 
     /// Erase the flash page at `start_address`.
-    pub fn wipe_data(&mut self, start_address: u32) -> Result<(), FlashError> {
+    pub fn wipe_data(&mut self, start_address: u32) -> Result<(), FlashManagerError> {
         // The erase function is unsafe so we wrap it here.
-        unsafe { self.flc.erase_page(start_address) }
+        unsafe { Ok(self.flc.erase_page(start_address)?) }
     }
 
     /// Reads the first 4 bytes (magic) from the flash page at `start_address`

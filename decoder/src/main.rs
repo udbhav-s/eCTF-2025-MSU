@@ -1,6 +1,9 @@
 #![no_std]
 #![no_main]
 
+// Include the generated secrets.
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
+
 pub mod modules;
 
 pub extern crate max7800x_hal as hal;
@@ -10,8 +13,8 @@ pub use hal::entry;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
-use md5::{Digest, Md5};
-use modules::channel_manager::{save_subscription, SubscriptionError};
+use modules::channel_manager::check_subscription_valid_and_store;
+use modules::channel_manager::{decode_frame, ChannelFrame};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
@@ -19,20 +22,25 @@ use modules::hostcom_manager::{
 };
 use panic_halt as _; // Import panic handler
 
+// use embedded_io::Write;
+
 #[entry]
 fn main() -> ! {
     // Take ownership of the MAX78000 peripherals.
     let p = pac::Peripherals::take().unwrap();
-    // let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
+    let core = pac::CorePeripherals::take().expect("Failed to take core peripherals");
 
     // Initialize system peripherals and clocks.
     let mut gcr = hal::gcr::Gcr::new(p.gcr, p.lpgcr);
-    let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
+    let ipo: hal::gcr::clocks::Oscillator<
+        hal::gcr::clocks::InternalPrimaryOscillator,
+        hal::gcr::clocks::Enabled,
+    > = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
 
     // Initialize a delay timer using the ARM SYST (SysTick) peripheral.
-    // let rate = clks.sys_clk.frequency;
-    // let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
+    let rate = clks.sys_clk.frequency;
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, rate);
 
     // Initialize and split the GPIO0 peripheral into pins.
     let gpio0_pins = hal::gpio::Gpio0::new(p.gpio0, &mut gcr.reg).split();
@@ -51,9 +59,24 @@ fn main() -> ! {
     for &b in b"Flash controller initialized!\r\n" {
         console.write_byte(b);
     }
-    // delay.delay_ms(1000);
+    delay.delay_ms(1000);
 
     let mut flash_manager = FlashManager::new(flc);
+
+    // Example usage
+
+    // for &b in b"Decoder DK:\r\n"
+    //     .iter()
+    //     .chain(DECODER_DK.as_bytes().iter())
+    // {
+    //     console.write_byte(b);
+    // }
+    // for &b in b"Host Key Public:\r\n"
+    //     .iter()
+    //     .chain(HOST_KEY_PUB.as_bytes().iter())
+    // {
+    //     console.write_byte(b);
+    // }
 
     loop {
         // Read the header using our new low-overhead function.
@@ -61,13 +84,14 @@ fn main() -> ! {
         match hdr.opcode {
             x if x == MsgType::List as u8 => {
                 let _ = write_ack(&mut console);
-                write_debug(&mut console, "List section in rust\n");
+                write_debug(&mut console, "Hello from (release) list section in rust\n");
                 let _ = write_list(&mut console, &mut flash_manager);
             }
             x if x == MsgType::Subscribe as u8 => {
                 let _ = write_ack(&mut console);
                 let body = read_body(&mut console, hdr.length);
-                let result = save_subscription(&mut flash_manager, body);
+
+                let result = check_subscription_valid_and_store(&hdr, body, &mut flash_manager);
 
                 // Prepare a subscribe response header.
                 let resp_hdr = MessageHeader {
@@ -76,7 +100,8 @@ fn main() -> ! {
                     length: 0,
                 };
 
-                if let Err(SubscriptionError::InvalidChannelId) = result {
+                if let Err(_) = result {
+                    write_debug(&mut console, "Failed to verify subscription packet!");
                     let _ = write_error(&mut console);
                 } else {
                     // Write the response header byte-by-byte.
@@ -88,34 +113,55 @@ fn main() -> ! {
             }
             x if x == MsgType::Decode as u8 => {
                 let _ = write_ack(&mut console);
+
+                if hdr.length != core::mem::size_of::<ChannelFrame>() as u16 {
+                    write_debug(&mut console, "Error: Invalid frame length\n");
+                    let _ = write_error(&mut console);
+                    continue;
+                }
+
                 let body = read_body(&mut console, hdr.length);
 
-                // hashes
-                let h = b"hello world";
-                for _i in 0..64 {
-                    let mut hasher = Md5::new();
-                    hasher.update(h);
-                    let _hash = hasher.finalize();
+                let frame: &ChannelFrame = bytemuck::from_bytes::<ChannelFrame>(
+                    &body.data[0..core::mem::size_of::<ChannelFrame>()],
+                );
+
+                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
+                    // Prepare a decode response header.
+                    let resp_hdr = MessageHeader {
+                        magic: MSG_MAGIC,
+                        opcode: MsgType::Decode as u8,
+                        length: 64,
+                    };
+
+                    for &b in bytemuck::bytes_of(&resp_hdr) {
+                        console.write_byte(b);
+                    }
+
+                    let _ = read_ack(&mut console);
+
+                    // Write the decrypted frame
+                    for b in frame_content {
+                        console.write_byte(b);
+                    }
+                } else {
+                    write_debug(&mut console, "Error: Could not decode frame!\n");
+                    let _ = write_error(&mut console);
+                    continue;
                 }
 
-                // Prepare a decode response header.
-                let resp_hdr = MessageHeader {
-                    magic: MSG_MAGIC,
-                    opcode: MsgType::Decode as u8,
-                    length: hdr.length - 12,
-                };
-                for &b in bytemuck::bytes_of(&resp_hdr) {
-                    console.write_byte(b);
-                }
-                let _ = read_ack(&mut console);
-                // Write the decoded frame (skip the first 12 bytes).
-                for &b in &body.data[12..(hdr.length as usize)] {
-                    console.write_byte(b);
-                }
+                // hashes
+                // let h = b"hello world";
+                // for _i in 0..64 {
+                //     let mut hasher = Md5::new();
+                //     hasher.update(h);
+                //     let _hash = hasher.finalize();
+                // }
             }
             _ => {
                 // Unsupported command: send a simple error message.
-                for &b in b"We only support the List command right now!\n" {
+                // TODO: Print actual error command
+                for &b in b"Unsupported command!\n" {
                     console.write_byte(b);
                 }
             }
