@@ -9,6 +9,31 @@ use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY};
 
+const CHANNEL_0_SUBSCRIPTION_TEST: ChannelSubscription = ChannelSubscription {
+    info: ChannelInfo {
+        channel_id: 0,
+        start_timestamp: 0,
+        end_timestamp: u64::MAX,
+    },
+    passwords: ChannelPasswords {
+        contents: {
+            let mut contents: [ChannelPassword; 128] = [ChannelPassword {
+                node_trunc: 0,
+                node_ext: 0,
+                password: [0; 16],
+            }; 128];
+            
+            contents[0] = ChannelPassword {
+                node_trunc: 0,
+                node_ext: 2,
+                password: [0; 16],
+            };
+
+            contents
+        }
+    }
+};
+
 #[derive(Debug)]
 pub enum SubscriptionError {
     InvalidChannelId,
@@ -217,12 +242,19 @@ pub fn decode_frame(
     flash_manager: &mut FlashManager,
     frame: &ChannelFrame,
 ) -> Result<[u8; 64], ()> {
-    let sub_page_addr = match get_subscription_addr(flash_manager, frame.channel) {
-        Some(addr) => addr,
-        None => return Err(()),
-    };
+    let subscription: &ChannelSubscription = match frame.channel {
+        0 => {
+            &CHANNEL_0_SUBSCRIPTION_TEST
+        }
+        _ => {
+            let sub_page_addr = match get_subscription_addr(flash_manager, frame.channel) {
+                Some(addr) => addr,
+                None => return Err(()),
+            };
 
-    let subscription = flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?;
+            &flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?
+        }
+    };
 
     let mut node_num: u128 = (frame.timestamp as u128) + ((1 as u128) << 64);
 
