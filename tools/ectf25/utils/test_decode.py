@@ -145,6 +145,6 @@ class DecoderTester():
 if __name__ == '__main__':
     tester = DecoderTester()
     tester.setUp()
-    tester.test_decode_wrong_signature()
-    # tester.test_decode_single()
+    # tester.test_decode_wrong_signature()
+    tester.test_decode_single()
     # tester.test_decode_random()
