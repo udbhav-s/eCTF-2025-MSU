@@ -9,6 +9,7 @@ use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY, CHANNEL_0_SUBSCRIPTION};
 
+#[derive(Clone, Copy)]
 pub struct ActiveChannel {
     pub channel_id: u32,
     pub last_frame: u64,
@@ -69,7 +70,7 @@ pub fn initialize_active_channels(
     active_channels: &mut [Option<ActiveChannel>; 8],
     flash_manager: &mut FlashManager
 ) {
-    let idx: usize = 0;
+    let mut idx: usize = 0;
     // TODO: Turn this into an iterator
     for i in 0..8 {
         // TODO: move flash base to a constants file, as well as flash magic
@@ -84,6 +85,8 @@ pub fn initialize_active_channels(
                         last_frame: 0,
                         received: false
                     });
+
+                    idx += 1;
                 }
             },
             Ok(_) => {}
@@ -93,9 +96,28 @@ pub fn initialize_active_channels(
 }
 
 pub fn validate_channel_timestamp(frame: &ChannelFrame, active_channels: &mut ActiveChannelsList) -> bool {
-    for &Some(active_channel) in active_channels.iter() {
-        
+    for channel_opt in active_channels.iter_mut() {
+        if let Some(channel) = channel_opt.as_mut() {
+            if channel.channel_id != frame.channel {
+                continue
+            }
+
+            if !channel.received {
+                channel.received = true;
+                channel.last_frame = frame.timestamp;
+                return true;
+            }
+            else if channel.received && frame.timestamp > channel.last_frame {
+                channel.last_frame = frame.timestamp;
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
     }
+
+    false
 }
 
 // Todo: Add more error types to SubscriptionError and use it here
@@ -261,6 +283,7 @@ pub fn read_channel(
 pub fn decode_frame(
     flash_manager: &mut FlashManager,
     frame: &ChannelFrame,
+    active_channels: &mut ActiveChannelsList,
 ) -> Result<[u8; 64], ()> {
     let subscription: &ChannelSubscription = match frame.channel {
         0 => {
@@ -275,6 +298,10 @@ pub fn decode_frame(
             &flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?
         }
     };
+
+    if !validate_channel_timestamp(frame, active_channels) {
+        return Err(());
+    }
 
     let mut node_num: u128 = (frame.timestamp as u128) + ((1 as u128) << 64);
 

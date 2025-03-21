@@ -14,7 +14,7 @@ pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
 use modules::channel_manager::check_subscription_valid_and_store;
-use modules::channel_manager::{decode_frame, ChannelFrame, ActiveChannel};
+use modules::channel_manager::{decode_frame, ChannelFrame, ActiveChannel, initialize_active_channels};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
@@ -78,7 +78,7 @@ fn main() -> ! {
 
     let mut channels: [Option<ActiveChannel>; 8] = [None; 8];
 
-    initialize_active_channels(&mut channels);
+    initialize_active_channels(&mut channels, &mut flash_manager);
 
     loop {
         // Read the header using our new low-overhead function.
@@ -128,7 +128,7 @@ fn main() -> ! {
                     &body.data[0..core::mem::size_of::<ChannelFrame>()],
                 );
 
-                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
+                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame, &mut channels) {
                     // Prepare a decode response header.
                     let resp_hdr = MessageHeader {
                         magic: MSG_MAGIC,
