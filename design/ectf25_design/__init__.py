@@ -161,6 +161,30 @@ class ChannelKeyDerivation:
         node = self.get_key_for_node(node_num)
         return node.key
 
+    def get_node_traversal_for_frame(self, start: int, end: int, frame_num: int):
+        """Given a start and end timestamp, return the node numbers traversed to reach that frame
+        Including the node from the generated cover that will be used for deriving that frame key"""
+        
+        # Get the covering node numbers for the frame range
+        covering_nodes = self.get_covering_nodes(start, end)
+        
+        # Calculate the node number for the frame
+        node_num = frame_num + 2**self.height
+        
+        # Traverse to root to get the path
+        traversal = []
+        n = node_num
+        while n > 1:
+            traversal.append(n)
+            n = n // 2
+        
+        # Reverse to get traversal from root to leaf
+        traversal = traversal[::-1]
+        
+        # Create a list of tuples with node number and inclusion in cover
+        traversal_with_cover_info = [(node, node in covering_nodes) for node in traversal]
+        
+        return traversal_with_cover_info
 
     def get_frame_key_from_cover(self, nodes: List[ChannelTreeNode], frame_num: int):
         """Given a cover of the tree and a frame to decode, verify that the frame can be decoded
@@ -262,6 +286,11 @@ def gen_secrets(channels: list[int]) -> bytes:
     return json.dumps(secrets).encode()
 
 
-# if __name__ == "__main__":
-#     test = ChannelTreeNode(node_num=1, key=b"0000")
-#     print(get_channel_node_cover(test))
+if __name__ == "__main__":
+    ckd = ChannelKeyDerivation(b"test")
+    result = ckd.get_node_traversal_for_frame(123456789, 387654321, 123456789)
+
+    convert = lambda n: { "trunc": n // 2, "ext": n % 2 + 1 }
+    subs = [(convert(n[0]), n[1]) for n in result]
+
+    print(result)
