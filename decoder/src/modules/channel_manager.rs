@@ -281,7 +281,7 @@ pub fn decode_frame(
 
     let mut password_bytes: [u8; 16] = password_node.ok_or(())?.password;
 
-    for branch in path.iter() {
+    for branch in path[i..].iter() {
         let mut hasher = Md5::new();
 
         let mut pass_in: [u8; 17] = [0; 17];
