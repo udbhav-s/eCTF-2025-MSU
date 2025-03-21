@@ -27,10 +27,10 @@ class DecoderTester():
 
     def test_decode(self):
         """Test the encode function of the Encoder class"""
-        channel = 3
+        channel = 1
         frame = b"Test frame data"
         frame = frame + b"\x00"*(64 - len(frame))
-        timestamp = 1234567890
+        timestamp = 123456789
 
         # Encode the frame
         print("Encoding the frame")

@@ -126,13 +126,17 @@ fn main() -> ! {
                     &body.data[0..core::mem::size_of::<ChannelFrame>()],
                 );
 
-                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
+                write_debug(&mut console, "Created ChannelFrame from bytes\n");
+
+                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame, &mut console) {
                     // Prepare a decode response header.
                     let resp_hdr = MessageHeader {
                         magic: MSG_MAGIC,
                         opcode: MsgType::Decode as u8,
                         length: 64,
                     };
+
+                    write_debug(&mut console, "Writing bytes of response header\n");
 
                     for &b in bytemuck::bytes_of(&resp_hdr) {
                         console.write_byte(b);

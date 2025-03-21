@@ -9,6 +9,8 @@ use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY, CHANNEL_0_SUBSCRIPTION};
 
+use super::hostcom_manager::{write_debug, UartHalOps};
+
 #[derive(Debug)]
 pub enum SubscriptionError {
     InvalidChannelId,
@@ -213,19 +215,28 @@ pub fn read_channel(
     }
 }
 
-pub fn decode_frame(
+pub fn decode_frame<U: UartHalOps>(
     flash_manager: &mut FlashManager,
     frame: &ChannelFrame,
+    console: &mut U,
 ) -> Result<[u8; 64], ()> {
+
+    write_debug(console, "In decode_frame\n");
+    
     let subscription: &ChannelSubscription = match frame.channel {
         0 => {
+            write_debug(console, "Matched channel 0 subscription\n");
             &CHANNEL_0_SUBSCRIPTION
         }
         _ => {
+            write_debug(console, "Finding subscription address\n");
+
             let sub_page_addr = match get_subscription_addr(flash_manager, frame.channel) {
                 Some(addr) => addr,
                 None => return Err(()),
             };
+
+            write_debug(console, "Found subscription address\n");
 
             &flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?
         }
@@ -244,6 +255,8 @@ pub fn decode_frame(
     }
 
     let mut password_node: Option<ChannelPassword> = None;
+
+    write_debug(console, "Created node path\n");
 
     // let path_idx: usize = 0;
 
@@ -274,11 +287,15 @@ pub fn decode_frame(
         i += 1;
     }
 
+    write_debug(console, "Iterated through path and subscription nodes\n");
+
     if password_node.is_none() {
         return Err(());
     }
 
     let mut password_bytes: [u8; 16] = password_node.ok_or(())?.password;
+
+    write_debug(console, "Hashing nodes\n");
 
     for branch in path.iter() {
         let mut hasher = Md5::new();
@@ -300,12 +317,16 @@ pub fn decode_frame(
         password_bytes = hasher.finalize().into();
     }
 
+    write_debug(console, "Done hashing, extending password\n");
+
     // Extend password to 32 bytes
     let mut extended_password: [u8; 32] = [0; 32];
     extended_password[..16].copy_from_slice(&password_bytes);
     let mut hasher = Md5::new();
     hasher.update(&password_bytes);
     extended_password[16..].copy_from_slice(&hasher.finalize());
+
+    write_debug(console, "Decrypting frame\n");
 
     // Decrypt frame
     let mut cipher = ChaCha20::new(&extended_password.into(), &frame.nonce.into());
