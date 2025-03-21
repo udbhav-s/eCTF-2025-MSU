@@ -1,6 +1,6 @@
 use crate::modules::flash_manager::{FlashManager, FlashManagerError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody, MessageHeader};
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{Pod, Zeroable, bytes_of};
 use ed25519_dalek::pkcs8::DecodePublicKey;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::{Signature, Verifier};
@@ -220,7 +220,7 @@ pub fn decode_frame(
     // Verify frame signature
     let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
 
-    let message = &bytes_of(&frame)[..core::mem::size_of::<ChannelFrame>() - 64];
+    let message = &bytes_of(frame)[..core::mem::size_of::<ChannelFrame>() - 64];
     let signature = &frame.signature;
     
     let sig_result = Signature::from_slice(signature);
