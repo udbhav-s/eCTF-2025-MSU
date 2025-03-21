@@ -15,6 +15,8 @@ pub struct ActiveChannel {
     pub received: bool,
 }
 
+type ActiveChannelsList = [Option<ActiveChannel>; 8];
+
 #[derive(Debug)]
 pub enum SubscriptionError {
     InvalidChannelId,
@@ -90,7 +92,11 @@ pub fn initialize_active_channels(
     }
 }
 
-pub fn validate_channel_timestamp() {}
+pub fn validate_channel_timestamp(frame: &ChannelFrame, active_channels: &mut ActiveChannelsList) -> bool {
+    for &Some(active_channel) in active_channels.iter() {
+        
+    }
+}
 
 // Todo: Add more error types to SubscriptionError and use it here
 pub fn check_subscription_valid_and_store(
