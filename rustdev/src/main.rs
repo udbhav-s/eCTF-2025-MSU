@@ -14,15 +14,13 @@ pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
 use modules::channel_manager::check_subscription_valid_and_store;
-use modules::channel_manager::{decode_frame, ChannelFrame};
+use modules::channel_manager::{decode_frame, ChannelFrame, ActiveChannel};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
     MessageHeader, MsgType, MSG_MAGIC,
 };
 use panic_halt as _; // Import panic handler
-
-// use embedded_io::Write;
 
 #[entry]
 fn main() -> ! {
@@ -77,6 +75,10 @@ fn main() -> ! {
     // {
     //     console.write_byte(b);
     // }
+
+    let mut channels: [Option<ActiveChannel>; 8] = [None; 8];
+
+    initialize_active_channels(&mut channels);
 
     loop {
         // Read the header using our new low-overhead function.

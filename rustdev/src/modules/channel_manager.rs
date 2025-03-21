@@ -9,6 +9,12 @@ use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY, CHANNEL_0_SUBSCRIPTION};
 
+pub struct ActiveChannel {
+    pub channel_id: u32,
+    pub last_frame: u64,
+    pub received: bool,
+}
+
 #[derive(Debug)]
 pub enum SubscriptionError {
     InvalidChannelId,
@@ -56,6 +62,35 @@ pub struct ChannelFrame {
 // const PAGE_SIZE: u32 = 0x2000;
 // const NUM_PAGES: usize = 8;
 // const BASE_ADDRESS: u32 = 0x1006_0000;
+
+pub fn initialize_active_channels(
+    active_channels: &mut [Option<ActiveChannel>; 8],
+    flash_manager: &mut FlashManager
+) {
+    let idx: usize = 0;
+    // TODO: Turn this into an iterator
+    for i in 0..8 {
+        // TODO: move flash base to a constants file, as well as flash magic
+        let addr = 0x1006_2000 + (i as u32 * 0x2000);
+        match flash_manager.read_magic(addr) {
+            // Magic present, the page is occupied
+            Ok(0xABCD) => {
+                // Read the ChannelInfo header for the subscription
+                if let Ok(channel) = flash_manager.read_data::<ChannelInfo>(addr) {
+                    active_channels[idx] = Some(ActiveChannel {
+                        channel_id: channel.channel_id,
+                        last_frame: 0,
+                        received: false
+                    });
+                }
+            },
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+}
+
+pub fn validate_channel_timestamp() {}
 
 // Todo: Add more error types to SubscriptionError and use it here
 pub fn check_subscription_valid_and_store(
