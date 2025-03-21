@@ -249,7 +249,7 @@ pub fn decode_frame(
 
     node_num = 1;
     let mut i = 0;
-    while i < 64 {
+    while i < 65 {
         // Look for corresponding node in subscription package
         for sub_idx in 0..128 {
             let c = &subscription.passwords.contents[sub_idx];
@@ -258,14 +258,15 @@ pub fn decode_frame(
                 break;
             }
             
-            let c_node_num: u128 = (c.node_trunc * 2) as u128 + (c.node_ext - 1) as u128;
+            let c_node_num: u128 = (c.node_trunc as u128)*2  + (c.node_ext - 1) as u128;
             if c_node_num == node_num {
                 password_node = Some(*c);
                 break;
             }
         }
 
-        if password_node.is_some() {
+        // Password found, or we have checked the last node
+        if password_node.is_some() || i == 64 {
             break;
         }
 
