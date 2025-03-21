@@ -58,6 +58,24 @@ class DecoderTester():
 
         print(decoded_frame)
 
+    def test_decode_wrong_signature(self):
+        """Test the encode function of the Encoder class"""
+        channel = 1
+        frame = b"Test frame data"
+        frame = frame + b"\x00"*(64 - len(frame))
+        timestamp = 1234
+
+        # Encode the frame
+        encoded_frame = self.encoder.encode(channel, frame, timestamp)
+
+        fake_frame = encoded_frame[:-64] + get_random_bytes(64)
+
+        # Decode frame
+        decoder = DecoderIntf("/dev/ttyACM0")
+        decoded_frame = decoder.decode(fake_frame)
+
+        print(decoded_frame)
+
     def test_decode_random(self):
         sub_ranges: List[Tuple[int, int]] = [(0, 0) for i in range(4)]
 
@@ -127,5 +145,6 @@ class DecoderTester():
 if __name__ == '__main__':
     tester = DecoderTester()
     tester.setUp()
+    tester.test_decode_wrong_signature()
     # tester.test_decode_single()
-    tester.test_decode_random()
+    # tester.test_decode_random()
