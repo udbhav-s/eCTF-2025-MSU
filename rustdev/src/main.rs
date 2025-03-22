@@ -103,7 +103,7 @@ fn main() -> ! {
                 };
 
                 if let Err(_) = result {
-                    write_debug(&mut console, "Failed to verify subscription packet!");
+                    write_debug(&mut console, "Failed to add subscription!");
                     let _ = write_error(&mut console);
                 } else {
                     // Write the response header byte-by-byte.

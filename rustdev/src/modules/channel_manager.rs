@@ -269,7 +269,7 @@ pub fn save_subscription(
 
         return Ok(());
     } else {
-        // No empty page or matching channel was found, this should not happen
+        // No empty page or matching channel was found, max subscriptions reached
         return Err(SubscriptionError::NoPageFound);
     }
 }
