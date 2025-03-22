@@ -1,6 +1,6 @@
 use crate::modules::flash_manager::{FlashManager, FlashManagerError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody, MessageHeader};
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{Pod, Zeroable, bytes_of};
 use ed25519_dalek::pkcs8::DecodePublicKey;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::{Signature, Verifier};
@@ -289,6 +289,30 @@ pub fn decode_frame(
     frame: &ChannelFrame,
     active_channels: &mut ActiveChannelsList,
 ) -> Result<[u8; 64], ()> {
+    // Verify frame signature
+    let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
+
+    let message = &bytes_of(frame)[..core::mem::size_of::<ChannelFrame>() - 64];
+    let signature = &frame.signature;
+    
+    let sig_result = Signature::from_slice(signature);
+
+    if let Err(_) = sig_result {
+        return Err(());
+    }
+
+    let sig = sig_result.unwrap();
+    
+    let result = verifying_key.verify(message, &sig);
+    
+    if result.is_err() {
+        // write_debug(&mut console, "Signature verification failed\n");
+        return Err(());
+    } else {
+        // write_debug(&mut console, "Signature verification succeeded!\n");
+    }
+
+    // Signature verified; let's decrypt the frame
     let subscription: &ChannelSubscription = match frame.channel {
         0 => {
             &CHANNEL_0_SUBSCRIPTION
