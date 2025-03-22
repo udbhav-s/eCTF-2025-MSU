@@ -70,7 +70,11 @@ pub fn initialize_active_channels(
     active_channels: &mut [Option<ActiveChannel>; 8],
     flash_manager: &mut FlashManager
 ) {
-    let mut idx: usize = 0;
+    let mut idx: usize = 1;
+
+    // Initialize emergency channel subscription
+    active_channels[0] = Some(ActiveChannel { channel_id:0, last_frame: 0, received: false });
+
     // TODO: Turn this into an iterator
     for i in 0..8 {
         // TODO: move flash base to a constants file, as well as flash magic
