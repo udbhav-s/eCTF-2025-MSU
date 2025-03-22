@@ -35,7 +35,7 @@ impl From<FlashManagerError> for SubscriptionError {
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct ChannelPassword {
     pub node_trunc: u64,    // Upper 64 bits of the node in the tree (node_num // 2)
-    pub node_ext: u8,       // This will be 1 (left) or 2 (right) (node_num % 2)
+    pub node_ext: u8,       // This will be 1 (left) or 2 (right) (node_num % 2 + 1)
     pub password: [u8; 16],
 }
 
