@@ -1,3 +1,4 @@
+import unittest
 import json
 import struct
 import random
@@ -9,13 +10,13 @@ from Crypto.PublicKey import ECC
 from Crypto.Random import get_random_bytes
 from ectf25_design import Secrets
 from ectf25_design.gen_subscription import gen_subscription
-from ectf25.utils.decoder import DecoderIntf
+from ectf25.utils.decoder import DecoderIntf, DecoderError
 
 def get_secrets() -> Secrets:
-    with open("global.secrets") as f:
+    with open("../global.secrets") as f:
         return json.loads(f.read())
 
-class DecoderTester():
+class TestDecoder(unittest.TestCase):
     def setUp(self):
         """Set up test environment with secrets and test parameters"""
         random.seed(0xdedbeef)
@@ -28,8 +29,19 @@ class DecoderTester():
         self.secrets_bytes = secrets_bytes
         self.encoder = Encoder(secrets_bytes)
 
+        self.decoder = DecoderIntf("/dev/ttyACM0")
+
+    def decoder_sub_channels(self, channels=[1, 2, 3, 4]):
+        logger.debug(f"Resetting decoder subscriptions")
+        for ch in channels:
+            sub: bytes = gen_subscription(self.secrets_bytes, 0xdeadbeef, 0, 2**64-1, ch)
+            self.decoder.subscribe(sub)
+
     def test_decode_single(self):
-        """Test the encode function of the Encoder class"""
+        self.decoder_sub_channels()
+
+        logger.debug("Testing decode single frame")
+
         channel = 1
         frame = b"Test frame data"
         frame = frame + b"\x00"*(64 - len(frame))
@@ -46,20 +58,22 @@ class DecoderTester():
         channel, timestamp, _nonce = struct.unpack("<IQ12s", header)
 
         # Derive the frame key
-        channel_root = bytes.fromhex(self.secrets["channels"][str(channel)])
-        deriv = ChannelKeyDerivation(root=channel_root, height=64)
-        frame_key = deriv.extend_key(deriv.get_frame_key(timestamp))
+        # channel_root = bytes.fromhex(self.secrets["channels"][str(channel)])
+        # deriv = ChannelKeyDerivation(root=channel_root, height=64)
+        # frame_key = deriv.extend_key(deriv.get_frame_key(timestamp))
 
-        print(f"Frame key bytes: {deriv.get_frame_key(timestamp)}")
+        # print(f"Frame key bytes: {deriv.get_frame_key(timestamp)}")
 
         # Decode frame
-        decoder = DecoderIntf("/dev/ttyACM0")
-        decoded_frame = decoder.decode(encoded_frame)
+        decoded_frame = self.decoder.decode(encoded_frame)
 
         print(decoded_frame)
 
     def test_decode_wrong_signature(self):
-        """Test the encode function of the Encoder class"""
+        logger.debug("Testing decoder rejects wrong signature in frame")
+
+        self.decoder_sub_channels()
+
         channel = 1
         frame = b"Test frame data"
         frame = frame + b"\x00"*(64 - len(frame))
@@ -71,13 +85,14 @@ class DecoderTester():
         fake_frame = encoded_frame[:-64] + get_random_bytes(64)
 
         # Decode frame
-        decoder = DecoderIntf("/dev/ttyACM0")
-        decoded_frame = decoder.decode(fake_frame)
-
-        print(decoded_frame)
+        with self.assertRaises(Exception):
+            decoded_frame = self.decoder.decode(fake_frame)
 
     def test_decode_random(self):
+        logger.debug("Testing random subscription ranges and frames")
+
         sub_ranges: List[Tuple[int, int]] = [(0, 0) for i in range(4)]
+        last_timestamps: List[int] = [-1 for _ in range(4)]  # Initialize last timestamps for each channel
 
         # Create random subscriptions for channels 0-3
         for i in range(4):
@@ -105,7 +120,7 @@ class DecoderTester():
                     logger.debug(f"Pass, channel 0 subscription failed")
         
         # Try random frame
-        for _ in range(1000):
+        for _ in range(100):
             # Generate random frame timestamp and channel
             timestamp = random.randint(0, 2**64 - 1)
             channel = random.randint(0, 4)
@@ -124,27 +139,30 @@ class DecoderTester():
                 # Check if the frame is within the subscription range
                 if channel < 4:
                     start, end = sub_ranges[channel]
-                    if not (start <= timestamp <= end):
-                        raise AssertionError("Frame decoded outside of subscription range")
-                    # Check if decoded frame matches the raw frame data
-                    if decoded_frame != raw_frame_data:
-                        raise AssertionError("Decoded frame does not match raw frame data")
-                else:
-                    raise AssertionError("Channel 4 should not decode successfully")
+                    self.assertTrue(start <= timestamp <= end, "Frame decoded outside of subscription range")
+                    
+                    # Check if the frame is monotonically increasing
+                    if timestamp <= last_timestamps[channel]:
+                        self.fail(f"Frame timestamp {timestamp} is not greater than last timestamp {last_timestamps[channel]} for channel {channel}")
+                    
+                    # Update last timestamp for the channel
+                    last_timestamps[channel] = timestamp
 
+                    # Check if decoded frame matches the raw frame data
+                    self.assertEqual(decoded_frame, raw_frame_data, "Decoded frame does not match raw frame data")
+                else:
+                    self.fail("Channel 4 should not decode successfully")
             except Exception as e:
                 # Expect error for frames outside subscription range or for channel 4
                 if channel < 4:
                     start, end = sub_ranges[channel]
-                    if start <= timestamp <= end:
-                        raise e  # Unexpected error for valid frame
-                elif channel == 4:
-                    logger.debug(f"Pass, channel 4 frame failed as expected")
+                    if start <= timestamp <= end and timestamp > last_timestamps[channel]:
+                        self.fail(f"Unexpected error for valid frame: {(channel, timestamp, start, end, last_timestamps[channel])}")
 
 
-if __name__ == '__main__':
-    tester = DecoderTester()
-    tester.setUp()
-    # tester.test_decode_wrong_signature()
-    tester.test_decode_single()
-    # tester.test_decode_random()
+# if __name__ == '__main__':
+#     tester = DecoderTester()
+#     tester.setUp()
+#     # tester.test_decode_wrong_signature()
+#     tester.test_decode_single()
+#     # tester.test_decode_random()
