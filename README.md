@@ -1,16 +1,12 @@
-# eCTF Insecure Example
+# MSU Spartans 2025 eCTF Design
+# Michigan State University
 
-This repository holds the insecure example design for an eCTF Satellite TV System.
+This repository holds the design and implementation of a secure Satellite TV System.
 
 ## Layout
 
 - `decoder/` - Firmware for the television decoder.
-    - `project.mk` - This file defines project specific variables included in the Makefile
-    - `Makefile` - This makefile is invoked by the eCTF tools when creating a decoder.
-    - `Dockerfile` - Describes the build environment used by eCTF build tools.
-    - `inc/` - Directory with c header files
-    - `src/` - Directory with c source files
-    - `wolfssl/` - Location to place wolfssl library for included Crypto Example
+    - TODO
 - `design/` - Host design elements
     - `ectf25_design/` - Host design source code
         - `encoder.py` - Encodes frames

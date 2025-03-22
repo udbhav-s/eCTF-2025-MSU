@@ -1,3 +1,10 @@
+"""
+Author: MSU Spartans
+Date: 2025
+
+Utilities for Secure Key Management
+"""
+
 import json
 from Crypto.Random import get_random_bytes
 from Crypto.PublicKey import ECC
