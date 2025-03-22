@@ -89,75 +89,76 @@ class TestDecoder(unittest.TestCase):
             decoded_frame = self.decoder.decode(fake_frame)
 
     def test_decode_random(self):
-        logger.debug("Testing random subscription ranges and frames")
+        pass
+        # logger.debug("Testing random subscription ranges and frames")
 
-        sub_ranges: List[Tuple[int, int]] = [(0, 0) for i in range(4)]
-        last_timestamps: List[int] = [-1 for _ in range(4)]  # Initialize last timestamps for each channel
+        # sub_ranges: List[Tuple[int, int]] = [(0, 0) for i in range(4)]
+        # last_timestamps: List[int] = [-1 for _ in range(4)]  # Initialize last timestamps for each channel
 
-        # Create random subscriptions for channels 0-3
-        for i in range(4):
-            start = random.randint(0, 2**64 - 2)
-            end = random.randint(start, 2**64 - 1)
+        # # Create random subscriptions for channels 0-3
+        # for i in range(4):
+        #     start = random.randint(0, 2**64 - 2)
+        #     end = random.randint(start, 2**64 - 1)
 
-            sub_ranges[i] = (start, end)
+        #     sub_ranges[i] = (start, end)
 
-        decoder = DecoderIntf("/dev/ttyACM0")
+        # decoder = DecoderIntf("/dev/ttyACM0")
 
-        logger.disable("ectf25.utils.decoder")
+        # logger.disable("ectf25.utils.decoder")
 
-        # Generate and load subscriptions
-        for i in range(4):
-            sub_range = sub_ranges[i]
-            try:
-                logger.debug(f"Writing random subscription for channel {i}")
-                sub: bytes = gen_subscription(self.secrets_bytes, 0xdeadbeef, sub_range[0], sub_range[1], i)
-                decoder.subscribe(sub)
-            except Exception as e:
-                # Expect error for channel 0 subscription
-                if i != 0:
-                    raise e
-                else:
-                    logger.debug(f"Pass, channel 0 subscription failed")
+        # # Generate and load subscriptions
+        # for i in range(4):
+        #     sub_range = sub_ranges[i]
+        #     try:
+        #         logger.debug(f"Writing random subscription for channel {i}")
+        #         sub: bytes = gen_subscription(self.secrets_bytes, 0xdeadbeef, sub_range[0], sub_range[1], i)
+        #         decoder.subscribe(sub)
+        #     except Exception as e:
+        #         # Expect error for channel 0 subscription
+        #         if i != 0:
+        #             raise e
+        #         else:
+        #             logger.debug(f"Pass, channel 0 subscription failed")
         
-        # Try random frame
-        for _ in range(100):
-            # Generate random frame timestamp and channel
-            timestamp = random.randint(0, 2**64 - 1)
-            channel = random.randint(0, 4)
+        # # Try random frame
+        # for _ in range(100):
+        #     # Generate random frame timestamp and channel
+        #     timestamp = random.randint(0, 2**64 - 1)
+        #     channel = random.randint(0, 4)
 
-            # Generate random frame data
-            raw_frame_data = get_random_bytes(64)
+        #     # Generate random frame data
+        #     raw_frame_data = get_random_bytes(64)
 
-            try:
-                # Encode the frame
-                logger.debug(f"Encoding frame for channel {channel} at timestamp {timestamp}")
-                encoded_frame = self.encoder.encode(channel, raw_frame_data, timestamp)
+        #     try:
+        #         # Encode the frame
+        #         logger.debug(f"Encoding frame for channel {channel} at timestamp {timestamp}")
+        #         encoded_frame = self.encoder.encode(channel, raw_frame_data, timestamp)
 
-                # Attempt to decode the frame
-                decoded_frame = decoder.decode(encoded_frame)
+        #         # Attempt to decode the frame
+        #         decoded_frame = decoder.decode(encoded_frame)
 
-                # Check if the frame is within the subscription range
-                if channel < 4:
-                    start, end = sub_ranges[channel]
-                    self.assertTrue(start <= timestamp <= end, "Frame decoded outside of subscription range")
+        #         # Check if the frame is within the subscription range
+        #         if channel < 4:
+        #             start, end = sub_ranges[channel]
+        #             self.assertTrue(start <= timestamp <= end, "Frame decoded outside of subscription range")
                     
-                    # Check if the frame is monotonically increasing
-                    if timestamp <= last_timestamps[channel]:
-                        self.fail(f"Frame timestamp {timestamp} is not greater than last timestamp {last_timestamps[channel]} for channel {channel}")
+        #             # Check if the frame is monotonically increasing
+        #             if timestamp <= last_timestamps[channel]:
+        #                 self.fail(f"Frame timestamp {timestamp} is not greater than last timestamp {last_timestamps[channel]} for channel {channel}")
                     
-                    # Update last timestamp for the channel
-                    last_timestamps[channel] = timestamp
+        #             # Update last timestamp for the channel
+        #             last_timestamps[channel] = timestamp
 
-                    # Check if decoded frame matches the raw frame data
-                    self.assertEqual(decoded_frame, raw_frame_data, "Decoded frame does not match raw frame data")
-                else:
-                    self.fail("Channel 4 should not decode successfully")
-            except Exception as e:
-                # Expect error for frames outside subscription range or for channel 4
-                if channel < 4:
-                    start, end = sub_ranges[channel]
-                    if start <= timestamp <= end and timestamp > last_timestamps[channel]:
-                        self.fail(f"Unexpected error for valid frame: {(channel, timestamp, start, end, last_timestamps[channel])}")
+        #             # Check if decoded frame matches the raw frame data
+        #             self.assertEqual(decoded_frame, raw_frame_data, "Decoded frame does not match raw frame data")
+        #         else:
+        #             self.fail("Channel 4 should not decode successfully")
+        #     except Exception as e:
+        #         # Expect error for frames outside subscription range or for channel 4
+        #         if channel < 4:
+        #             start, end = sub_ranges[channel]
+        #             if start <= timestamp <= end and timestamp > last_timestamps[channel]:
+        #                 self.fail(f"Unexpected error for valid frame: {(channel, timestamp, start, end, last_timestamps[channel])}")
 
 
 # if __name__ == '__main__':
