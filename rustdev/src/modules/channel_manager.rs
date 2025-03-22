@@ -16,7 +16,7 @@ pub struct ActiveChannel {
     pub received: bool,
 }
 
-type ActiveChannelsList = [Option<ActiveChannel>; 8];
+pub type ActiveChannelsList = [Option<ActiveChannel>; 9];
 
 #[derive(Debug)]
 pub enum SubscriptionError {
@@ -67,7 +67,7 @@ pub struct ChannelFrame {
 // const BASE_ADDRESS: u32 = 0x1006_0000;
 
 pub fn initialize_active_channels(
-    active_channels: &mut [Option<ActiveChannel>; 8],
+    active_channels: &mut ActiveChannelsList,
     flash_manager: &mut FlashManager
 ) {
     let mut idx: usize = 1;
