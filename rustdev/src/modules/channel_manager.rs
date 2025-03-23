@@ -1,5 +1,6 @@
 use crate::modules::flash_manager::{FlashManager, FlashManagerError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody, MessageHeader};
+use crate::modules::constants::{BASE_ADDRESS, MAX_SUBS};
 use bytemuck::{Pod, Zeroable, bytes_of};
 use ed25519_dalek::pkcs8::DecodePublicKey;
 use ed25519_dalek::VerifyingKey;
@@ -8,6 +9,8 @@ use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY, CHANNEL_0_SUBSCRIPTION};
+
+use super::constants::PAGE_SIZE;
 
 #[derive(Clone, Copy)]
 pub struct ActiveChannel {
@@ -62,9 +65,51 @@ pub struct ChannelFrame {
     pub signature: [u8; 64],
 }
 
-// const PAGE_SIZE: u32 = 0x2000;
-// const NUM_PAGES: usize = 8;
-// const BASE_ADDRESS: u32 = 0x1006_0000;
+struct SubscriptionPageIterator<'a> {
+    page_num: usize,
+    return_empty: bool,
+    flash_manager: &'a mut FlashManager,
+}
+
+impl Iterator for SubscriptionPageIterator<'_>  {
+    type Item = (u32, Option<ChannelInfo>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let addr = BASE_ADDRESS + (self.page_num as u32 * PAGE_SIZE);
+
+        if self.page_num >= MAX_SUBS {
+            return None;
+        }
+
+        match self.flash_manager.read_magic(addr) {
+            // Magic present, the page is occupied
+            Ok(0xABCD) => {
+                // Read the ChannelInfo header for the subscription
+                if let Ok(channel) = self.flash_manager.read_data::<ChannelInfo>(addr) {
+                    self.page_num += 1;
+
+                    Some((addr, Some(channel)))
+                } else {
+                    None
+                }
+            },
+            // Unoccupied page
+            Ok(_) => {
+                if self.return_empty {
+                    return Some((addr, None));
+                } else {
+                    // Empty page reached means none of the subsequent pages should have a subscription
+                    return None;
+                }
+            }
+            Err(_) => { None }
+        }
+    }
+}
+
+fn channel_subscriptions(flash_manager: &mut FlashManager, return_empty: bool) -> SubscriptionPageIterator {
+    SubscriptionPageIterator { page_num: 0, return_empty, flash_manager }
+}
 
 pub fn initialize_active_channels(
     active_channels: &mut ActiveChannelsList,
@@ -73,28 +118,17 @@ pub fn initialize_active_channels(
     let mut idx: usize = 1;
 
     // Initialize emergency channel subscription
-    active_channels[0] = Some(ActiveChannel { channel_id:0, last_frame: 0, received: false });
+    active_channels[0] = Some(ActiveChannel { channel_id: 0, last_frame: 0, received: false });
 
-    // TODO: Turn this into an iterator
-    for i in 0..8 {
-        // TODO: move flash base to a constants file, as well as flash magic
-        let addr = 0x1006_2000 + (i as u32 * 0x2000);
-        match flash_manager.read_magic(addr) {
-            // Magic present, the page is occupied
-            Ok(0xABCD) => {
-                // Read the ChannelInfo header for the subscription
-                if let Ok(channel) = flash_manager.read_data::<ChannelInfo>(addr) {
-                    active_channels[idx] = Some(ActiveChannel {
-                        channel_id: channel.channel_id,
-                        last_frame: 0,
-                        received: false
-                    });
+    for (_, c) in channel_subscriptions(flash_manager, false) {
+        if let Some(channel) = c {
+            active_channels[idx] = Some(ActiveChannel {
+                channel_id: channel.channel_id,
+                last_frame: 0,
+                received: false
+            });
 
-                    idx += 1;
-                }
-            },
-            Ok(_) => {}
-            Err(_) => {}
+            idx += 1;
         }
     }
 }
@@ -205,24 +239,14 @@ fn get_subscription_addr(
     channel_id: u32
 ) -> Option<u32> {
     let mut page_addr: Option<u32> = None;
-    
-    for i in 0..8 {
-        // TODO: move flash base to a constants file, as well as flash magic
-        let addr = 0x1006_2000 + (i as u32 * 0x2000);
-        match flash_manager.read_magic(addr) {
-            // Magic present, the page is occupied
-            Ok(0xABCD) => {
-                // Read the ChannelInfo header for the subscription
-                if let Ok(stored_sub) = flash_manager.read_data::<ChannelInfo>(addr) {
-                    if stored_sub.channel_id == channel_id {
-                        // Found a matching subscription
-                        page_addr = Some(addr);
-                        break;
-                    }
-                }
-            },
-            Ok(_) => {}
-            Err(_) => {}
+
+    for (addr, c) in channel_subscriptions(flash_manager, false) {
+        if let Some(stored_sub) = c {
+            if stored_sub.channel_id == channel_id {
+                // Found a matching subscription
+                page_addr = Some(addr);
+                break;
+            }
         }
     }
 
@@ -237,27 +261,18 @@ pub fn save_subscription(
     let channel_id = subscription.info.channel_id;
 
     let mut page_addr: Option<u32> = None;
-    
-    for i in 0..8 {
-        // TODO: move flash base to a constants file, as well as flash magic
-        let addr = 0x1006_2000 + (i as u32 * 0x2000);
-        match flash_manager.read_magic(addr) {
-            // Magic present, the page is occupied
-            Ok(0xABCD) => {
-                if let Ok(stored_sub) = flash_manager.read_data::<ChannelInfo>(addr) {
-                    if stored_sub.channel_id == channel_id {
-                        // Found a matching subscription, overwrite it
-                        page_addr = Some(addr);
-                        break;
-                    }
-                }
-            },
-            // Magic is not present, assume page unoccupied
-            Ok(_) => {
+
+    for (addr, c) in channel_subscriptions(flash_manager, true) {
+        if let Some(stored_sub) = c {
+            if stored_sub.channel_id == channel_id {
+                // Found a matching subscription
                 page_addr = Some(addr);
                 break;
             }
-            Err(_) => {}
+        } else {
+            // Found an unoccupied page
+            page_addr = Some(addr);
+            break;
         }
     }
 
