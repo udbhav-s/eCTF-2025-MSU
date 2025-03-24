@@ -135,9 +135,11 @@ class ChannelKeyDerivation:
         return nodes
 
     def get_left_subkey(self, key: bytes):
+        """Derive the key for the left child node"""
         return MD5.new(key + b"L").digest()
 
     def get_right_subkey(self, key: bytes):
+        """Derive the key for the right child node"""
         return MD5.new(key + b"R").digest()
 
     def get_key_for_node(self, node_num: int) -> ChannelTreeNode:
@@ -306,13 +308,3 @@ def gen_secrets(channels: list[int]) -> bytes:
     }
 
     return json.dumps(secrets).encode()
-
-
-if __name__ == "__main__":
-    ckd = ChannelKeyDerivation(b"test")
-    result = ckd.get_node_traversal_for_frame(123456789, 387654321, 123456789)
-
-    convert = lambda n: { "trunc": n // 2, "ext": n % 2 + 1 }
-    subs = [(convert(n[0]), n[1]) for n in result]
-
-    print(result)
