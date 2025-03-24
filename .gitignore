@@ -1,5 +1,7 @@
 ## Project .gitignore ##
 
+dumped_frames.json
+
 .DS_Store
 .vscode/
 **/gcc
@@ -335,5 +337,7 @@ wolfssl/
 
 !device/lib
 msdk/
+*_build/
 *.secrets
 *.subscription
+*.tree

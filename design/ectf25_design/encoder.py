@@ -13,7 +13,11 @@ Copyright: Copyright (c) 2025 The MITRE Corporation
 import argparse
 import struct
 import json
-
+from Crypto.Cipher import ChaCha20
+from Crypto.Random import get_random_bytes
+from ectf25_design import Secrets, ChannelKeyDerivation
+from Crypto.PublicKey import ECC
+from Crypto.Signature import eddsa
 
 class Encoder:
     def __init__(self, secrets: bytes):
@@ -27,11 +31,17 @@ class Encoder:
         #   improve the throughput of Encoder.encode
 
         # Load the json of the secrets file
-        secrets = json.loads(secrets)
+        secrets: Secrets = json.loads(secrets)
 
-        # Load the example secrets for use in Encoder.encode
-        # This will be "EXAMPLE" in the reference design"
-        self.some_secrets = secrets["some_secrets"]
+        # Process secrets
+        for k, val in secrets["channels"].items():
+            secrets["channels"][k] = bytes.fromhex(val)
+
+        self.secrets = secrets
+
+        # Load the host key and create signer
+        host_key = ECC.import_key(bytes.fromhex(secrets["host_key_priv"]))
+        self.signer = eddsa.new(host_key, 'rfc8032')
 
     def encode(self, channel: int, frame: bytes, timestamp: int) -> bytes:
         """The frame encoder function
@@ -51,10 +61,25 @@ class Encoder:
 
         :returns: The encoded frame, which will be sent to the Decoder
         """
-        # TODO: encode the satellite frames so that they meet functional and
-        #  security requirements
+        assert str(channel) in self.secrets["channels"].keys()
+        channel_root = self.secrets["channels"][str(channel)]
 
-        return struct.pack("<IQ", channel, timestamp) + frame
+        deriv = ChannelKeyDerivation(root=channel_root, height=64)
+
+        frame_key = deriv.extend_key(deriv.get_frame_key(timestamp))
+
+        nonce = get_random_bytes(12)
+        cipher = ChaCha20.new(key=frame_key, nonce=nonce)
+        encrypted_frame_data = cipher.encrypt(frame)
+
+        header_bytes = struct.pack("<IQ12s", channel, timestamp, nonce)
+
+        frame_content = header_bytes + encrypted_frame_data
+        signature = self.signer.sign(frame_content)
+
+        final_frame = frame_content + signature
+
+        return final_frame
 
 
 def main():

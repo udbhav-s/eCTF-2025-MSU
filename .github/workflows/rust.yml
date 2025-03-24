@@ -17,9 +17,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install Rust target
+      run: rustup target add thumbv7em-none-eabihf
+      
     - name: Build
       working-directory: ./rustdev
       run: cargo build --verbose
-    - name: Run tests
-      working-directory: ./rustdev
-      run: cargo test --verbose
+# No tests currently
+#    - name: Run tests
+#      working-directory: ./rustdev
+#      run: cargo test --verbose
