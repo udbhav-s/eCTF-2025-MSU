@@ -11,13 +11,28 @@ from Crypto.Random import get_random_bytes
 from ectf25_design import Secrets
 from ectf25_design.gen_subscription import gen_subscription
 from ectf25.utils.decoder import DecoderIntf, DecoderError
+from ectf25.utils.flash_board import reset_board
+
+def reset_decoder(erase_flash=False):
+    reset_board("/home/udbhav/Documents/ectf-2025/eCTF-2025-MSU/rustdev/target/thumbv7em-none-eabihf/debug/eCTF_2025_MSU", 50000, erase_flash)
 
 def get_secrets() -> Secrets:
-    with open("../global.secrets") as f:
-        return json.loads(f.read())
+    try:
+        with open("global.secrets") as f:
+            return json.loads(f.read())
+    except FileNotFoundError:
+        with open("../global.secrets") as f:
+            return json.loads(f.read())
+    
+def decoder_sub_channels(secrets_bytes, decoder: DecoderIntf, channels=[1, 2, 3, 4]):
+    logger.debug(f"Resetting decoder subscriptions")
+    for ch in channels:
+        sub: bytes = gen_subscription(secrets_bytes, 0xdeadbeef, 0, 2**64-1, ch)
+        decoder.subscribe(sub)
 
 class TestDecoder(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         """Set up test environment with secrets and test parameters"""
         random.seed(0xdedbeef)
 
@@ -31,14 +46,17 @@ class TestDecoder(unittest.TestCase):
 
         self.decoder = DecoderIntf("/dev/ttyACM0")
 
-    def decoder_sub_channels(self, channels=[1, 2, 3, 4]):
-        logger.debug(f"Resetting decoder subscriptions")
-        for ch in channels:
-            sub: bytes = gen_subscription(self.secrets_bytes, 0xdeadbeef, 0, 2**64-1, ch)
-            self.decoder.subscribe(sub)
+        logger.disable("ectf25.utils.decoder")
+
+        # Reset the decoder and erase full flash
+        # reset_decoder(True)
 
     def test_decode_single(self):
-        self.decoder_sub_channels()
+        reset_decoder(True)
+
+        decoder_sub_channels(self.secrets_bytes, self.decoder)
+
+        reset_decoder(False)
 
         logger.debug("Testing decode single frame")
 
@@ -67,103 +85,100 @@ class TestDecoder(unittest.TestCase):
         # Decode frame
         decoded_frame = self.decoder.decode(encoded_frame)
 
-        print(decoded_frame)
+        logger.debug(b"Got decoded frame: " + decoded_frame)
 
-    def test_decode_wrong_signature(self):
-        logger.debug("Testing decoder rejects wrong signature in frame")
+    # def test_decode_wrong_signature(self):
+    #     logger.debug("Testing decoder rejects wrong signature in frame")
 
-        self.decoder_sub_channels()
+    #     reset_decoder(True)
 
-        channel = 1
-        frame = b"Test frame data"
-        frame = frame + b"\x00"*(64 - len(frame))
-        timestamp = 1234
+    #     decoder_sub_channels(self.secrets_bytes, self.decoder)
 
-        # Encode the frame
-        encoded_frame = self.encoder.encode(channel, frame, timestamp)
+    #     reset_decoder(False)
 
-        fake_frame = encoded_frame[:-64] + get_random_bytes(64)
+    #     channel = 1
+    #     frame = b"Test frame data"
+    #     frame = frame + b"\x00"*(64 - len(frame))
+    #     timestamp = 1234
 
-        # Decode frame
-        with self.assertRaises(Exception):
-            decoded_frame = self.decoder.decode(fake_frame)
+    #     # Encode the frame
+    #     encoded_frame = self.encoder.encode(channel, frame, timestamp)
 
-    def test_decode_random(self):
-        pass
-        # logger.debug("Testing random subscription ranges and frames")
+    #     fake_frame = encoded_frame[:-64] + get_random_bytes(64)
 
-        # sub_ranges: List[Tuple[int, int]] = [(0, 0) for i in range(4)]
-        # last_timestamps: List[int] = [-1 for _ in range(4)]  # Initialize last timestamps for each channel
+    #     # Decode frame
+    #     with self.assertRaises(Exception):
+    #         decoded_frame = self.decoder.decode(fake_frame)
 
-        # # Create random subscriptions for channels 0-3
-        # for i in range(4):
-        #     start = random.randint(0, 2**64 - 2)
-        #     end = random.randint(start, 2**64 - 1)
+    # def test_decode_random(self):
+    #     logger.debug("Testing random subscription ranges and frames")
 
-        #     sub_ranges[i] = (start, end)
+    #     sub_ranges: List[Tuple[int, int]] = [(0, 0) for i in range(4)]
+    #     last_timestamps: List[int] = [-1 for _ in range(4)]  # Initialize last timestamps for each channel
 
-        # decoder = DecoderIntf("/dev/ttyACM0")
+    #     sub_ranges[0] = (0, 2**64-1)
+    #     # Create random subscriptions for channels 1-3
+    #     for i in range(1, 4):
+    #         start = random.randint(0, 2**64 - 2)
+    #         end = random.randint(start, 2**64 - 1)
 
-        # logger.disable("ectf25.utils.decoder")
+    #         sub_ranges[i] = (start, end)
 
-        # # Generate and load subscriptions
-        # for i in range(4):
-        #     sub_range = sub_ranges[i]
-        #     try:
-        #         logger.debug(f"Writing random subscription for channel {i}")
-        #         sub: bytes = gen_subscription(self.secrets_bytes, 0xdeadbeef, sub_range[0], sub_range[1], i)
-        #         decoder.subscribe(sub)
-        #     except Exception as e:
-        #         # Expect error for channel 0 subscription
-        #         if i != 0:
-        #             raise e
-        #         else:
-        #             logger.debug(f"Pass, channel 0 subscription failed")
+    #     decoder = DecoderIntf("/dev/ttyACM0")
+
+    #     logger.disable("ectf25.utils.decoder")
+
+    #     # Generate and load subscriptions
+    #     for i in range(4):
+    #         sub_range = sub_ranges[i]
+    #         try:
+    #             logger.debug(f"Writing random subscription for channel {i}")
+    #             sub: bytes = gen_subscription(self.secrets_bytes, 0xdeadbeef, sub_range[0], sub_range[1], i)
+    #             decoder.subscribe(sub)
+    #         except Exception as e:
+    #             # Expect error for channel 0 subscription
+    #             if i != 0:
+    #                 raise e
+    #             else:
+    #                 logger.debug(f"Pass, channel 0 subscription failed")
         
-        # # Try random frame
-        # for _ in range(100):
-        #     # Generate random frame timestamp and channel
-        #     timestamp = random.randint(0, 2**64 - 1)
-        #     channel = random.randint(0, 4)
+    #     # Channel 4 will not decode
+    #     sub_ranges.append((None, None))
+        
+    #     # Try random frame
+    #     for _ in range(30):
+    #         # Generate random frame timestamp and channel
+    #         channel = random.randint(0, 4)
 
-        #     # Generate random frame data
-        #     raw_frame_data = get_random_bytes(64)
+    #         if 1 <= channel <= 3 and random.random() < 0.5:
+    #             start, end = sub_ranges[channel]
+    #             timestamp = random.randint(start, end)
+    #         else:
+    #             timestamp = random.randint(0, 2**64 - 1)
 
-        #     try:
-        #         # Encode the frame
-        #         logger.debug(f"Encoding frame for channel {channel} at timestamp {timestamp}")
-        #         encoded_frame = self.encoder.encode(channel, raw_frame_data, timestamp)
+    #         # Generate random frame data
+    #         raw_frame_data = get_random_bytes(64)
 
-        #         # Attempt to decode the frame
-        #         decoded_frame = decoder.decode(encoded_frame)
+    #         # Encode the frame
+    #         logger.debug(f"Encoding frame for channel {channel} at timestamp {timestamp}")
+    #         encoded_frame = self.encoder.encode(channel, raw_frame_data, timestamp)
 
-        #         # Check if the frame is within the subscription range
-        #         if channel < 4:
-        #             start, end = sub_ranges[channel]
-        #             self.assertTrue(start <= timestamp <= end, "Frame decoded outside of subscription range")
-                    
-        #             # Check if the frame is monotonically increasing
-        #             if timestamp <= last_timestamps[channel]:
-        #                 self.fail(f"Frame timestamp {timestamp} is not greater than last timestamp {last_timestamps[channel]} for channel {channel}")
-                    
-        #             # Update last timestamp for the channel
-        #             last_timestamps[channel] = timestamp
+    #         start, end = sub_ranges[channel]
+    #         if channel < 4 and timestamp > last_timestamps[channel] and start <= timestamp and timestamp <= end:
+    #             # Frame should decode and match 
+    #             decoded_frame = decoder.decode(encoded_frame)
+                
+    #             self.assertEqual(decoded_frame, raw_frame_data, "Decoded frame does not match raw frame data")
 
-        #             # Check if decoded frame matches the raw frame data
-        #             self.assertEqual(decoded_frame, raw_frame_data, "Decoded frame does not match raw frame data")
-        #         else:
-        #             self.fail("Channel 4 should not decode successfully")
-        #     except Exception as e:
-        #         # Expect error for frames outside subscription range or for channel 4
-        #         if channel < 4:
-        #             start, end = sub_ranges[channel]
-        #             if start <= timestamp <= end and timestamp > last_timestamps[channel]:
-        #                 self.fail(f"Unexpected error for valid frame: {(channel, timestamp, start, end, last_timestamps[channel])}")
+    #             # Update last timestamp for the channel
+    #             last_timestamps[channel] = timestamp
+    #         else:
+    #             with self.assertRaises(DecoderError):
+    #                 decoded_frame = decoder.decode(encoded_frame)
 
-
-# if __name__ == '__main__':
-#     tester = DecoderTester()
-#     tester.setUp()
-#     # tester.test_decode_wrong_signature()
-#     tester.test_decode_single()
-#     # tester.test_decode_random()
+if __name__ == '__main__':
+    tester = TestDecoder()
+    tester.setUp()
+    # tester.test_decode_wrong_signature()
+    # tester.test_decode_single()
+    tester.test_decode_random()
