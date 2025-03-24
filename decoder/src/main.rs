@@ -14,15 +14,13 @@ pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
 use modules::channel_manager::check_subscription_valid_and_store;
-use modules::channel_manager::{decode_frame, ChannelFrame};
+use modules::channel_manager::{decode_frame, ChannelFrame, ActiveChannelsList, initialize_active_channels};
 use modules::flash_manager::FlashManager;
 use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
     MessageHeader, MsgType, MSG_MAGIC,
 };
 use panic_halt as _; // Import panic handler
-
-// use embedded_io::Write;
 
 #[entry]
 fn main() -> ! {
@@ -78,6 +76,10 @@ fn main() -> ! {
     //     console.write_byte(b);
     // }
 
+    let mut channels: ActiveChannelsList = [None; 9];
+
+    initialize_active_channels(&mut channels, &mut flash_manager);
+
     loop {
         // Read the header using our new low-overhead function.
         let hdr = read_header(&mut console);
@@ -101,7 +103,7 @@ fn main() -> ! {
                 };
 
                 if let Err(_) = result {
-                    write_debug(&mut console, "Failed to verify subscription packet!");
+                    write_debug(&mut console, "Failed to add subscription!");
                     let _ = write_error(&mut console);
                 } else {
                     // Write the response header byte-by-byte.
@@ -126,7 +128,7 @@ fn main() -> ! {
                     &body.data[0..core::mem::size_of::<ChannelFrame>()],
                 );
 
-                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
+                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame, &mut channels) {
                     // Prepare a decode response header.
                     let resp_hdr = MessageHeader {
                         magic: MSG_MAGIC,

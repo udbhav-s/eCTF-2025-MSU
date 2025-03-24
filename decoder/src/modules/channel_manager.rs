@@ -1,6 +1,7 @@
 use crate::modules::flash_manager::{FlashManager, FlashManagerError};
 use crate::modules::hostcom_manager::{ChannelInfo, MessageBody, MessageHeader};
-use bytemuck::{Pod, Zeroable};
+use crate::modules::constants::{BASE_ADDRESS, MAX_SUBS};
+use bytemuck::{Pod, Zeroable, bytes_of};
 use ed25519_dalek::pkcs8::DecodePublicKey;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::{Signature, Verifier};
@@ -8,6 +9,17 @@ use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use md5::{Digest, Md5};
 use crate::{HOST_KEY_PUB, DECODER_ID, DECODER_KEY, CHANNEL_0_SUBSCRIPTION};
+
+use super::constants::PAGE_SIZE;
+
+#[derive(Clone, Copy)]
+pub struct ActiveChannel {
+    pub channel_id: u32,
+    pub last_frame: u64,
+    pub received: bool,
+}
+
+pub type ActiveChannelsList = [Option<ActiveChannel>; 9];
 
 #[derive(Debug)]
 pub enum SubscriptionError {
@@ -26,7 +38,7 @@ impl From<FlashManagerError> for SubscriptionError {
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct ChannelPassword {
     pub node_trunc: u64,    // Upper 64 bits of the node in the tree (node_num // 2)
-    pub node_ext: u8,       // This will be 1 (left) or 2 (right) (node_num % 2)
+    pub node_ext: u8,       // This will be 1 (left) or 2 (right) (node_num % 2 + 1)
     pub password: [u8; 16],
 }
 
@@ -53,9 +65,98 @@ pub struct ChannelFrame {
     pub signature: [u8; 64],
 }
 
-// const PAGE_SIZE: u32 = 0x2000;
-// const NUM_PAGES: usize = 8;
-// const BASE_ADDRESS: u32 = 0x1006_0000;
+struct SubscriptionPageIterator<'a> {
+    page_num: usize,
+    return_empty: bool,
+    flash_manager: &'a mut FlashManager,
+}
+
+impl Iterator for SubscriptionPageIterator<'_>  {
+    type Item = (u32, Option<ChannelInfo>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let addr = BASE_ADDRESS + (self.page_num as u32 * PAGE_SIZE);
+
+        if self.page_num >= MAX_SUBS {
+            return None;
+        }
+
+        match self.flash_manager.read_magic(addr) {
+            // Magic present, the page is occupied
+            Ok(0xABCD) => {
+                // Read the ChannelInfo header for the subscription
+                if let Ok(channel) = self.flash_manager.read_data::<ChannelInfo>(addr) {
+                    self.page_num += 1;
+
+                    Some((addr, Some(channel)))
+                } else {
+                    None
+                }
+            },
+            // Unoccupied page
+            Ok(_) => {
+                if self.return_empty {
+                    return Some((addr, None));
+                } else {
+                    // Empty page reached means none of the subsequent pages should have a subscription
+                    return None;
+                }
+            }
+            Err(_) => { None }
+        }
+    }
+}
+
+fn channel_subscriptions(flash_manager: &mut FlashManager, return_empty: bool) -> SubscriptionPageIterator {
+    SubscriptionPageIterator { page_num: 0, return_empty, flash_manager }
+}
+
+pub fn initialize_active_channels(
+    active_channels: &mut ActiveChannelsList,
+    flash_manager: &mut FlashManager
+) {
+    let mut idx: usize = 1;
+
+    // Initialize emergency channel subscription
+    active_channels[0] = Some(ActiveChannel { channel_id: 0, last_frame: 0, received: false });
+
+    for (_, c) in channel_subscriptions(flash_manager, false) {
+        if let Some(channel) = c {
+            active_channels[idx] = Some(ActiveChannel {
+                channel_id: channel.channel_id,
+                last_frame: 0,
+                received: false
+            });
+
+            idx += 1;
+        }
+    }
+}
+
+pub fn validate_channel_timestamp(frame: &ChannelFrame, active_channels: &mut ActiveChannelsList) -> bool {
+    for channel_opt in active_channels.iter_mut() {
+        if let Some(channel) = channel_opt.as_mut() {
+            if channel.channel_id != frame.channel {
+                continue
+            }
+
+            if !channel.received {
+                channel.received = true;
+                channel.last_frame = frame.timestamp;
+                return true;
+            }
+            else if channel.received && frame.timestamp > channel.last_frame {
+                channel.last_frame = frame.timestamp;
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+    }
+
+    false
+}
 
 // Todo: Add more error types to SubscriptionError and use it here
 pub fn check_subscription_valid_and_store(
@@ -138,24 +239,14 @@ fn get_subscription_addr(
     channel_id: u32
 ) -> Option<u32> {
     let mut page_addr: Option<u32> = None;
-    
-    for i in 0..8 {
-        // TODO: move flash base to a constants file, as well as flash magic
-        let addr = 0x1006_2000 + (i as u32 * 0x2000);
-        match flash_manager.read_magic(addr) {
-            // Magic present, the page is occupied
-            Ok(0xABCD) => {
-                // Read the ChannelInfo header for the subscription
-                if let Ok(stored_sub) = flash_manager.read_data::<ChannelInfo>(addr) {
-                    if stored_sub.channel_id == channel_id {
-                        // Found a matching subscription
-                        page_addr = Some(addr);
-                        break;
-                    }
-                }
-            },
-            Ok(_) => {}
-            Err(_) => {}
+
+    for (addr, c) in channel_subscriptions(flash_manager, false) {
+        if let Some(stored_sub) = c {
+            if stored_sub.channel_id == channel_id {
+                // Found a matching subscription
+                page_addr = Some(addr);
+                break;
+            }
         }
     }
 
@@ -170,27 +261,18 @@ pub fn save_subscription(
     let channel_id = subscription.info.channel_id;
 
     let mut page_addr: Option<u32> = None;
-    
-    for i in 0..8 {
-        // TODO: move flash base to a constants file, as well as flash magic
-        let addr = 0x1006_2000 + (i as u32 * 0x2000);
-        match flash_manager.read_magic(addr) {
-            // Magic present, the page is occupied
-            Ok(0xABCD) => {
-                if let Ok(stored_sub) = flash_manager.read_data::<ChannelInfo>(addr) {
-                    if stored_sub.channel_id == channel_id {
-                        // Found a matching subscription, overwrite it
-                        page_addr = Some(addr);
-                        break;
-                    }
-                }
-            },
-            // Magic is not present, assume page unoccupied
-            Ok(_) => {
+
+    for (addr, c) in channel_subscriptions(flash_manager, true) {
+        if let Some(stored_sub) = c {
+            if stored_sub.channel_id == channel_id {
+                // Found a matching subscription
                 page_addr = Some(addr);
                 break;
             }
-            Err(_) => {}
+        } else {
+            // Found an unoccupied page
+            page_addr = Some(addr);
+            break;
         }
     }
 
@@ -202,7 +284,7 @@ pub fn save_subscription(
 
         return Ok(());
     } else {
-        // No empty page or matching channel was found, this should not happen
+        // No empty page or matching channel was found, max subscriptions reached
         return Err(SubscriptionError::NoPageFound);
     }
 }
@@ -220,7 +302,32 @@ pub fn read_channel(
 pub fn decode_frame(
     flash_manager: &mut FlashManager,
     frame: &ChannelFrame,
+    active_channels: &mut ActiveChannelsList,
 ) -> Result<[u8; 64], ()> {
+    // Verify frame signature
+    let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
+
+    let message = &bytes_of(frame)[..core::mem::size_of::<ChannelFrame>() - 64];
+    let signature = &frame.signature;
+    
+    let sig_result = Signature::from_slice(signature);
+
+    if let Err(_) = sig_result {
+        return Err(());
+    }
+
+    let sig = sig_result.unwrap();
+    
+    let result = verifying_key.verify(message, &sig);
+    
+    if result.is_err() {
+        // write_debug(&mut console, "Signature verification failed\n");
+        return Err(());
+    } else {
+        // write_debug(&mut console, "Signature verification succeeded!\n");
+    }
+
+    // Signature verified; let's decrypt the frame
     let subscription: &ChannelSubscription = match frame.channel {
         0 => {
             &CHANNEL_0_SUBSCRIPTION
@@ -234,6 +341,10 @@ pub fn decode_frame(
             &flash_manager.read_data::<ChannelSubscription>(sub_page_addr).map_err(|_| {})?
         }
     };
+
+    if !validate_channel_timestamp(frame, active_channels) {
+        return Err(());
+    }
 
     let mut node_num: u128 = (frame.timestamp as u128) + ((1 as u128) << 64);
 
