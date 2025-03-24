@@ -65,6 +65,8 @@ pub fn check_subscription_valid_and_store(
 ) -> Result<(), ()>  {
     let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
 
+    let header_len = 36;
+
     let msg_len = hdr.length as usize - 64;
     let message = &body.data[..msg_len];
     let signature = &body.data[msg_len..hdr.length as usize];
@@ -106,10 +108,12 @@ pub fn check_subscription_valid_and_store(
 
     let mut cipher = ChaCha20::new(&DECODER_KEY.into(), &nonce.into());
 
-    let mut passwords_data: [u8; 128*25] = [0; 128*25];
-    passwords_data.copy_from_slice(&message[36..36+(128*25)]);
+    let msg_passwords = &message[header_len..msg_len];
 
-    cipher.apply_keystream(&mut passwords_data);
+    let mut passwords_data: [u8; 128*25] = [0; 128*25];
+    passwords_data[..(msg_len-header_len)].copy_from_slice(&msg_passwords);
+
+    cipher.apply_keystream(&mut passwords_data[0..(msg_len - header_len)]);
 
     // Parse the passwords into ChannelPasswords
     let passwords = bytemuck::from_bytes::<ChannelPasswords>(&passwords_data);

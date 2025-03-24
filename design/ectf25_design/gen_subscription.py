@@ -39,7 +39,7 @@ def gen_subscription(
         - End timestamp (8 bytes)
         - Channel ID (4 bytes)
         - Encryption nonce (12 bytes)
-    Body (25 x 128 = 3200 bytes) of password bytes where a password is
+    Body (Up to 25 x 128 = 3200 bytes) of password bytes where a password is
         - Trunc: Node number // 2 (8 bytes)
         - Ext: Node number % 2 + 1 (1 byte)
         - Key: Key for node (16 bytes)
@@ -77,7 +77,7 @@ def gen_subscription(
         passwords_bytes += node_pass
 
     # Pad password bytes to size of 128 node passwords
-    passwords_bytes += b"\x00" * (128 * NODE_PASSWORD_SIZE - len(passwords_bytes))
+    # passwords_bytes += b"\x00" * (128 * NODE_PASSWORD_SIZE - len(passwords_bytes))
 
     decoder_key = get_decoder_key(secrets["decoder_dk"], device_id)
     nonce = get_random_bytes(12)

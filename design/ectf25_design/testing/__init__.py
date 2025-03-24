@@ -264,9 +264,12 @@ class TestGenSubscription(unittest.TestCase):
         """Test that subscription package has correct size"""
         secrets_bytes = json.dumps(self.secrets).encode()
         package = gen_subscription(secrets_bytes, self.device_id, self.start, self.end, self.channel)
+
+        ckd = ChannelKeyDerivation(self.secrets["channels"][str(self.channel)])
+        num_nodes = ckd.get_covering_nodes(self.start, self.end)
         
         # Expected size: 36 byte header + 25*128 byte encrypted body + 64 byte signature
-        expected_size = 36 + (25 * 128) + 64
+        expected_size = 36 + (25 * len(num_nodes)) + 64
         self.assertEqual(len(package), expected_size, 
                         f"Package size {len(package)} does not match expected {expected_size}")
     
