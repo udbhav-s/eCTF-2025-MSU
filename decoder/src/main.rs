@@ -93,7 +93,7 @@ fn main() -> ! {
                 let _ = write_ack(&mut console);
                 let body = read_body(&mut console, hdr.length);
 
-                let result = check_subscription_valid_and_store(&hdr, body, &mut flash_manager);
+                let result = check_subscription_valid_and_store(&hdr, body, &mut flash_manager, &mut channels);
 
                 // Prepare a subscribe response header.
                 let resp_hdr = MessageHeader {
@@ -151,18 +151,9 @@ fn main() -> ! {
                     let _ = write_error(&mut console);
                     continue;
                 }
-
-                // hashes
-                // let h = b"hello world";
-                // for _i in 0..64 {
-                //     let mut hasher = Md5::new();
-                //     hasher.update(h);
-                //     let _hash = hasher.finalize();
-                // }
             }
             _ => {
                 // Unsupported command: send a simple error message.
-                // TODO: Print actual error command
                 for &b in b"Unsupported command!\n" {
                     console.write_byte(b);
                 }

@@ -162,7 +162,8 @@ pub fn validate_channel_timestamp(frame: &ChannelFrame, active_channels: &mut Ac
 pub fn check_subscription_valid_and_store(
     hdr: &MessageHeader,
     body: MessageBody,
-    flash_manager: &mut FlashManager
+    flash_manager: &mut FlashManager,
+    active_channels: &mut ActiveChannelsList
 ) -> Result<(), ()>  {
     let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
 
@@ -231,7 +232,7 @@ pub fn check_subscription_valid_and_store(
     };
 
     // Store the subscription
-    return save_subscription(flash_manager, channel_subscription).map_err(|_| ());
+    return save_subscription(flash_manager, channel_subscription, active_channels).map_err(|_| ());
 }
 
 fn get_subscription_addr(
@@ -256,6 +257,7 @@ fn get_subscription_addr(
 pub fn save_subscription(
     flash_manager: &mut FlashManager,
     subscription: ChannelSubscription,
+    active_channels: &mut ActiveChannelsList,
 ) -> Result<(), SubscriptionError> {
 
     let channel_id = subscription.info.channel_id;
@@ -281,6 +283,27 @@ pub fn save_subscription(
             .wipe_data(addr)?;
         flash_manager
             .write_data(addr, 0xABCD, &subscription)?;
+
+        // Activate subscription
+        for i in 0..active_channels.len() {
+            let channel_opt = &mut active_channels[i];
+            if let Some(channel) = channel_opt.as_mut() {
+                // TODO: remove if unused
+                // Reset monotonic timestamp requirement on subscription update
+                // if channel.channel_id == channel_id {
+                //     channel.received = false;
+                //     channel.last_frame = 0;
+                // }
+            } else {
+                // None of the existing channels match - create new entry
+                active_channels[i] = Some(ActiveChannel {
+                    channel_id,
+                    received: false,
+                    last_frame: 0,
+                });
+                break;
+            }
+        }
 
         return Ok(());
     } else {
