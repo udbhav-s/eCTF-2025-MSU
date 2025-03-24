@@ -4,7 +4,6 @@ Date: 2025
 
 Utilities for Secure Key Management
 """
-
 import json
 from Crypto.Random import get_random_bytes
 from Crypto.PublicKey import ECC
@@ -15,6 +14,9 @@ from dataclasses import dataclass
 
 
 class Secrets(TypedDict):
+    """
+    Full data structure of the secrets file
+    """
     channels: Dict[str, str]  # Maps channel IDs to hex-encoded 16-byte secrets
     decoder_dk: str  # Hex-encoded 32-byte decoder key
     host_key: str  # Ed25519 host key in DER encoded as hex
@@ -22,12 +24,22 @@ class Secrets(TypedDict):
 
 @dataclass
 class ChannelTreeNode:
+    """
+    A single node in the below defined channel key derivation tree.
+    """
     node_num: int  # The number of a node in a level-order traversal of the tree
     key: bytes
 
 
 @dataclass
 class ChannelKeyDerivation:
+    """
+    The ChannelKeyDerivation class is used to derive keys for
+    encrypting frames for a certain channel based on their timestamps.
+
+    It efficiently conveys these derived keys through a tree covering
+    from the starting leaf node (timestamp) to the ending leaf node (timestamp).
+    """
     root: bytes
     height: int = 64
 
@@ -246,6 +258,9 @@ class ChannelKeyDerivation:
 
 
 def get_decoder_key(decoder_dk: bytes, decoder_id: int):
+    """
+    Derives a key for a specific decoder based on the unique decoder id.
+    """
     decoder_id_bytes = decoder_id.to_bytes(length=4, byteorder="little")
     return HKDF(
         master=decoder_dk, key_len=32, hashmod=SHA512, context=decoder_id_bytes, salt=""

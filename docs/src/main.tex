@@ -63,6 +63,24 @@ When building the decoder, it is provided with:
 
 \vspace{1cm}
 
+\section*{Key Management}
+Our system uses an asymmetric signing keypair, a unique secret corresponding to each decoder, and a unique secret for every (channel, timestamp) combination: the unique frame key.\\
+Because the cardinality of the set is $1 + 2^{32} + 2^{32}\times2^{64} \approx 2^{96}$, we cannot pre-generate and store this many keys during secret generation time; instead, we designed a key derivation strategy.\\
+At secret generation time, the list of channels which are to be supported are already given. Therefore, we generate a secret key corresponding to each channel at this time and store a mapping from channel id to channel secret.\\
+Unlike the channel list, the set of decoder IDs to be supported is not known at secret generation time. Therefore, we generate a single root decoder key at secret generation time, and use this root key along with the decoder's unique id to derive a unique decoder key at decoder build time.\\
+For integrity verification, an asymmetric signing keypair is generated at secret generation time, and the public key is distributed to each decoder, while the private key is held by the encoder alone.\\
+\subsection*{Frame Key Derivation Tree}
+The frame key was the most challenging to implement; we need to have a unique frame key for every possible (channel, timestamp) combination, and each decoder authorized to listen to a given channel must receive all the frame keys for that channel from the start timestamp to the ending timestamp through its subscription package.
+In order to accomplish this, we create a tree structure for key derivation. The channel secret described above serves as the root of the tree, and there are $2^64$ leaf nodes which are the frame keys of that channel for each timestamp. This tree is again too large to store, but any node can be derived random-access from any ancestor node. Each child node in this binary tree is the hash of the parent node plus a direction, left or right. This means that no parent may be derived from a child (for a preimage-resistant hash), but the descendants may all be derived from the ancestor. Note that this is not a Merkle tree, where the parent is derived from the children, but the opposite, where the children are derived from the parent.\\
+
+\section*{Algorithms}
+We use the following algorithms in our system:
+\begin{itemize}
+  \item ED25519 for asymmetric signature and verification
+  \item HKDF-SHA512 for decoder key derivation
+  \item MD5 Reverse Hash Tree for frame key derivation
+  \item ChaCha20 for encryption and decryption
+
 % Security Requirements section
 \section*{Security Requirements}
 
@@ -107,8 +125,5 @@ When attempting to view a channel, the decoder will check against the channel li
 
 \section*{Security Enhancement}
 The use of a series of keys K1, K2, \ldots, Kn specific to each decoder n keeps the system secure in the Pirated Subscription scenario. Each subscription package will be signed by a key specific to the decoder the channel is being provisioned for, to prevent other decoders in the same deployment from decrypting it. The encryption of channel frames remains the same, using the channel key.
-
-\section*{Key Management}
-
 
 \end{document}
