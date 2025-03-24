@@ -158,7 +158,6 @@ pub fn validate_channel_timestamp(frame: &ChannelFrame, active_channels: &mut Ac
     false
 }
 
-// Todo: Add more error types to SubscriptionError and use it here
 pub fn check_subscription_valid_and_store(
     hdr: &MessageHeader,
     body: MessageBody,
@@ -288,12 +287,10 @@ pub fn save_subscription(
         for i in 0..active_channels.len() {
             let channel_opt = &mut active_channels[i];
             if let Some(channel) = channel_opt.as_mut() {
-                // TODO: remove if unused
-                // Reset monotonic timestamp requirement on subscription update
-                // if channel.channel_id == channel_id {
-                //     channel.received = false;
-                //     channel.last_frame = 0;
-                // }
+                // Do nothing if subscription exists (don't reset monotonic timestamp counter)
+                if channel.id == channel_id {
+                    break;
+                }
             } else {
                 // None of the existing channels match - create new entry
                 active_channels[i] = Some(ActiveChannel {
@@ -382,8 +379,6 @@ pub fn decode_frame(
     }
 
     let mut password_node: Option<ChannelPassword> = None;
-
-    // let path_idx: usize = 0;
 
     node_num = 1;
     let mut i = 0;

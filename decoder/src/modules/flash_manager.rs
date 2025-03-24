@@ -47,7 +47,6 @@ impl FlashManager {
         // Total bytes = magic (4 bytes) + data
         let total_bytes = 4 + data_bytes.len();
         // For this example we use a stack buffer of fixed size.
-        // TODO: Do we need to copy to a buffer? Check if bytes can be written from data_bytes directly.
         assert!(total_bytes <= 4096, "Combined data too large for buffer");
         let mut buffer = [0u8; 4096];
 

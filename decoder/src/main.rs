@@ -61,21 +61,6 @@ fn main() -> ! {
 
     let mut flash_manager = FlashManager::new(flc);
 
-    // Example usage
-
-    // for &b in b"Decoder DK:\r\n"
-    //     .iter()
-    //     .chain(DECODER_DK.as_bytes().iter())
-    // {
-    //     console.write_byte(b);
-    // }
-    // for &b in b"Host Key Public:\r\n"
-    //     .iter()
-    //     .chain(HOST_KEY_PUB.as_bytes().iter())
-    // {
-    //     console.write_byte(b);
-    // }
-
     let mut channels: ActiveChannelsList = [None; 9];
 
     initialize_active_channels(&mut channels, &mut flash_manager);
@@ -86,7 +71,6 @@ fn main() -> ! {
         match hdr.opcode {
             x if x == MsgType::List as u8 => {
                 let _ = write_ack(&mut console);
-                write_debug(&mut console, "Hello from (release) list section in rust\n");
                 let _ = write_list(&mut console, &mut flash_manager);
             }
             x if x == MsgType::Subscribe as u8 => {

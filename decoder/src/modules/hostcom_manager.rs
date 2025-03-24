@@ -146,7 +146,6 @@ pub fn write_debug<U: UartHalOps>(console: &mut U, msg: &str) {
     }
 }
 
-// TODO: Check if i32 return type necessary
 /// Writes a ChannelInfo structure.
 #[inline(always)]
 pub fn write_channel<U: UartHalOps>(console: &mut U, channel: &ChannelInfo) -> i32 {
@@ -158,8 +157,6 @@ pub fn write_channel<U: UartHalOps>(console: &mut U, channel: &ChannelInfo) -> i
 }
 
 /// Writes a "list" message with channel information.
-/// Mimics the C version by writing the header, waiting for an ACK,
-/// sending a count and then each ChannelInfo.
 #[inline(always)]
 pub fn write_list<U: UartHalOps>(console: &mut U, flash_manager: &mut FlashManager) -> i32 {
     let mut count: u32 = 0;
