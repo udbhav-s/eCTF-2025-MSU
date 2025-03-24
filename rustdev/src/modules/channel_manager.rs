@@ -220,9 +220,9 @@ pub fn read_channel(
 pub fn decode_frame(
     flash_manager: &mut FlashManager,
     frame: &ChannelFrame,
+    verifying_key: &VerifyingKey,
 ) -> Result<[u8; 64], ()> {
     // Verify frame signature
-    let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {})?;
 
     let message = &bytes_of(frame)[..core::mem::size_of::<ChannelFrame>() - 64];
     let signature = &frame.signature;

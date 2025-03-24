@@ -20,6 +20,8 @@ use modules::hostcom_manager::{
     read_ack, read_body, read_header, write_ack, write_debug, write_error, write_list,
     MessageHeader, MsgType, MSG_MAGIC,
 };
+use ed25519_dalek::pkcs8::DecodePublicKey;
+use ed25519_dalek::VerifyingKey;
 use panic_halt as _; // Import panic handler
 
 // use embedded_io::Write;
@@ -62,6 +64,8 @@ fn main() -> ! {
     delay.delay_ms(1000);
 
     let mut flash_manager = FlashManager::new(flc);
+
+    let verifying_key = VerifyingKey::from_public_key_der(HOST_KEY_PUB).map_err(|_| {}).unwrap();
 
     // Example usage
 
@@ -126,7 +130,7 @@ fn main() -> ! {
                     &body.data[0..core::mem::size_of::<ChannelFrame>()],
                 );
 
-                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame) {
+                if let Ok(frame_content) = decode_frame(&mut flash_manager, &frame, &verifying_key) {
                     // Prepare a decode response header.
                     let resp_hdr = MessageHeader {
                         magic: MSG_MAGIC,
