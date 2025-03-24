@@ -10,6 +10,7 @@ pub extern crate max7800x_hal as hal;
 
 use bytemuck;
 pub use hal::entry;
+pub use hal::icc::Icc;
 pub use hal::flc::{FlashError, Flc};
 pub use hal::gcr::clocks::{Clock, SystemClock};
 pub use hal::pac;
@@ -54,6 +55,10 @@ fn main() -> ! {
         .clock_pclk(&clks.pclk)
         .parity(hal::uart::ParityBit::None)
         .build();
+
+    // Enable the ICC
+    let mut icc = Icc::new(p.icc0);
+    icc.enable();
 
     // Initialize the flash controller.
     let flc = hal::flc::Flc::new(p.flc, clks.sys_clk);
