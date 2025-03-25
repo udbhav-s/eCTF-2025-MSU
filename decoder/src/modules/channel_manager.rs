@@ -288,7 +288,7 @@ pub fn save_subscription(
             let channel_opt = &mut active_channels[i];
             if let Some(channel) = channel_opt.as_mut() {
                 // Do nothing if subscription exists (don't reset monotonic timestamp counter)
-                if channel.id == channel_id {
+                if channel.channel_id == channel_id {
                     break;
                 }
             } else {
