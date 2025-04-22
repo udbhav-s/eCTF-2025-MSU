@@ -1,6 +1,6 @@
-# eCTF Insecure Example
+# MSU 2025 eCTF design - Secure Satellite TV Decoder
 
-This repository holds the insecure example design for an eCTF Satellite TV System.
+This repository holds the MSU team's design for an eCTF Satellite TV System, written in Rust and Python. 
 
 ## Layout
 
